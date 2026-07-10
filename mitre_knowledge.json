@@ -1,0 +1,23 @@
+[
+  {
+    "attack_type": "brute force",
+    "technique_id": "T1110",
+    "technique_name": "Brute Force",
+    "tactic": "Credential Access",
+    "keywords": ["failed password", "failed login", "invalid user", "authentication failure", "ssh"]
+  },
+  {
+    "attack_type": "credential dumping",
+    "technique_id": "T1003",
+    "technique_name": "OS Credential Dumping",
+    "tactic": "Credential Access",
+    "keywords": ["lsass", "mimikatz", "sam dump", "ntds.dit"]
+  },
+  {
+    "attack_type": "powershell execution",
+    "technique_id": "T1059.001",
+    "technique_name": "PowerShell",
+    "tactic": "Execution",
+    "keywords": ["powershell", "-enc", "encodedcommand", "invoke-expression"]
+  }
+]

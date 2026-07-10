@@ -1,0 +1,35 @@
+Security Event Log
+
+Event ID: 4688
+
+New Process Created:
+Image: C:\Tools\mimikatz.exe
+Command Line:
+mimikatz.exe privilege::debug sekurlsa::logonpasswords
+
+User:
+Administrator
+
+Windows Defender
+
+Threat Detected
+
+Process:
+C:\Users\Admin\Downloads\mimikatz.exe
+
+Attempted access:
+LSASS Memory
+
+Action:
+Blocked
+
+Event ID: 4688
+
+Image:
+C:\Windows\System32\cmd.exe
+
+Command Line:
+procdump.exe -ma lsass.exe
+
+User:
+Administrator

