@@ -1,0 +1,31 @@
+Agentic_AI_Soc_analyst/
+
+agents/
+    alert_router.py
+    ioc_agent.py
+    threat_agent.py
+    mitre_agent.py
+    response_agent.py
+    report_agent.py
+
+core/
+    ollama_client.py
+    validator.py
+    parser.py
+
+actions/
+    block_ip.py
+    create_ticket.py
+    check_reputation.py
+
+memory/
+    memory.py
+
+rag/
+    vector_db.py
+
+utils/
+    prompts.py
+    logger.py
+
+main.py
