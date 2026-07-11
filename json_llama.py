@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 from ioc_formatter import IOCFormatter
 from report_generator import PDFReportGenerator
+from policy_engine import PolicyEngine
+from threat_intel import ThreatIntelClient
 
 
 ALLOWED_SEVERITIES = {"Low", "Medium", "High", "Critical"}
@@ -509,27 +511,45 @@ class SOCOrchestrator:
         self.mitre_agent = MitreAgent(mitre_path)
         self.threat_agent = ThreatAnalystAgent(OllamaClient(model))
         self.validator = ValidationEngine()
+        self.policy_engine = PolicyEngine()
+        self.threat_intel = ThreatIntelClient()
         self.response_agent = ResponseAgent()
         self.report_generator = PDFReportGenerator("reports")
 
     def process(
-    self,
-    log_data: str,
-    source_log: str | Path | None = None,
+        self,
+        log_data: str,
+        source_log: str | Path | None = None,
     ) -> dict[str, Any]:
         profile = self.profiler.profile(log_data)
         facts = self.ioc_agent.extract(log_data)
+        threat_intel_results = self.threat_intel.enrich_facts(facts)
         display_facts = self.ioc_formatter.format_facts(facts)
         candidates = self.mitre_agent.retrieve_candidates(log_data)
         trusted_mitre = self.mitre_agent.select_trusted(candidates)
         ai_data = self.threat_agent.analyze(log_data, profile, facts, trusted_mitre)
         validated = self.validator.validate(ai_data, facts, trusted_mitre, log_data)
+        policy_decision = self.policy_engine.apply(
+            technique_id=trusted_mitre["technique_id"],
+            log_data=log_data,
+            current_severity=validated["severity"],
+            current_confidence=validated["confidence"],
+            current_tool=validated["recommended_tool"],
+        )
+
+        validated["severity"] = policy_decision.severity
+        validated["confidence"] = policy_decision.confidence
+        validated["recommended_tool"] = policy_decision.recommended_tool
+        validated["policy_reason"] = policy_decision.reason
+
         tool_output = self.response_agent.execute(validated)
+        
         report_path = self.report_generator.generate(
             analysis=validated,
             profile=profile.__dict__,
             display_facts=display_facts,
             mitre_candidates=candidates,
+            threat_intel=threat_intel_results,
             source_log=source_log,
         )
         
@@ -539,6 +559,7 @@ class SOCOrchestrator:
             "mitre_candidates": candidates,
             "analysis": validated,
             "display_facts": display_facts,
+            "threat_intel": threat_intel_results,
             "tool_output": tool_output,
             "report_path": str(report_path),
         }
@@ -593,6 +614,9 @@ def main() -> None:
 
         print("\n========== VALIDATED SOC ANALYSIS ==========\n")
         print(json.dumps(result["analysis"], indent=4, sort_keys=True))
+
+        print("\n========== THREAT INTELLIGENCE ==========\n")
+        print(json.dumps(result["threat_intel"], indent=4, sort_keys=True))
 
         print("\n========== TOOL OUTPUT ==========\n")
         print(result["tool_output"])

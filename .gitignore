@@ -11,3 +11,6 @@ venv/
 
 # VS Code settings (optional)
 .vscode/
+
+json_llama_backup.py
+json_llama_backup_working.py

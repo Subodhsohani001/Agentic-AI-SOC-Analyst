@@ -183,6 +183,108 @@ class PDFReportGenerator:
             )
         )
         return table
+    
+    def _threat_intel_table(
+        self,
+        threat_intel: list[dict[str, Any]],
+    ) -> Table:
+        rows = [
+            [
+                Paragraph("<b>Observable</b>", self.styles["SmallText"]),
+                Paragraph("<b>Verdict</b>", self.styles["SmallText"]),
+                Paragraph("<b>Risk Score</b>", self.styles["SmallText"]),
+                Paragraph("<b>Provider Status</b>", self.styles["SmallText"]),
+            ]
+        ]
+
+        for item in threat_intel:
+            observable = self._safe_text(item.get("observable"))
+
+            # Defang analyst-facing observable
+            observable = observable.replace(".", "[.]")
+
+            verdict = self._safe_text(item.get("verdict"))
+            risk_score = f"{item.get('combined_risk_score', 0)} / 100"
+
+            provider_lines: list[str] = []
+
+            providers = item.get("providers", [])
+            if not isinstance(providers, list):
+                providers = []
+
+            for provider in providers:
+                if not isinstance(provider, dict):
+                    continue
+
+                provider_name = self._safe_text(provider.get("provider"))
+                provider_status = self._safe_text(provider.get("status"))
+
+                provider_lines.append(
+                    f"{provider_name} ({provider_status})"
+                )
+
+            provider_text = (
+                "<br/>".join(provider_lines)
+                if provider_lines
+                else "No provider results"
+            )
+
+            rows.append(
+                [
+                    Paragraph(observable, self.styles["SmallText"]),
+                    Paragraph(verdict, self.styles["SmallText"]),
+                    Paragraph(risk_score, self.styles["SmallText"]),
+                    Paragraph(provider_text, self.styles["SmallText"]),
+                ]
+            )
+
+        if len(rows) == 1:
+            rows.append(
+                [
+                    Paragraph("No observables", self.styles["SmallText"]),
+                    Paragraph(
+                        "No threat-intelligence results were available.",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph("0 / 100", self.styles["SmallText"]),
+                    Paragraph("Not available", self.styles["SmallText"]),
+                ]
+            )
+
+        table = Table(
+            rows,
+            colWidths=[38 * mm, 55 * mm, 25 * mm, 52 * mm],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#263238"),
+                    ),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.35,
+                        colors.HexColor("#B0BEC5"),
+                    ),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
+        )
+
+        return table
 
     def generate(
         self,
@@ -190,8 +292,11 @@ class PDFReportGenerator:
         profile: dict[str, Any],
         display_facts: dict[str, list[str]],
         mitre_candidates: list[dict[str, Any]] | None = None,
+        threat_intel: list[dict[str, Any]] | None = None,
         source_log: str | Path | None = None,
     ) -> Path:
+        threat_intel = threat_intel or []
+
         created_at = datetime.now()
         attack_type = self._safe_text(analysis.get("attack_type"))
         severity = self._safe_text(analysis.get("severity"))
@@ -300,8 +405,28 @@ class PDFReportGenerator:
         analyst_rows = [
             ("Notes", self._safe_text(assessment.get("notes"))),
             ("Recommendation", self._safe_text(analysis.get("recommendation"))),
+            ("Policy Reason", self._safe_text(analysis.get("policy_reason"))),
         ]
         story.append(self._key_value_table(analyst_rows))
+
+        story.append(
+            Paragraph(
+                "Threat Intelligence",
+                    self.styles["SectionHeading"],
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "External enrichment results are read-only and do not "
+                "automatically blacklist or submit observables.",
+                    self.styles["ReportBody"],
+            )
+        )
+
+        story.append(
+            self._threat_intel_table(threat_intel)
+        )
 
         if mitre_candidates:
             story.append(Paragraph("MITRE Candidate Evidence", self.styles["SectionHeading"]))
@@ -314,10 +439,12 @@ class PDFReportGenerator:
                             f"{self._safe_text(candidate.get('technique_name'))}",
                             self.styles["SmallText"],
                         ),
+                        
                         Paragraph(
                             self._safe_text(candidate.get("score")),
                             self.styles["SmallText"],
                         ),
+
                         Paragraph(
                             ", ".join(candidate.get("matched_keywords", []))
                             or "Not available",
