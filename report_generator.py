@@ -190,25 +190,48 @@ class PDFReportGenerator:
     ) -> Table:
         rows = [
             [
-                Paragraph("<b>Observable</b>", self.styles["SmallText"]),
-                Paragraph("<b>Verdict</b>", self.styles["SmallText"]),
-                Paragraph("<b>Risk Score</b>", self.styles["SmallText"]),
-                Paragraph("<b>Provider Status</b>", self.styles["SmallText"]),
+                Paragraph(
+                    "<b>Observable</b>",
+                    self.styles["SmallText"],
+                ),
+                Paragraph(
+                    "<b>Verdict</b>",
+                    self.styles["SmallText"],
+                ),
+                Paragraph(
+                    "<b>Risk Score</b>",
+                    self.styles["SmallText"],
+                ),
+                Paragraph(
+                    "<b>Provider Status</b>",
+                    self.styles["SmallText"],
+                ),
             ]
         ]
 
         for item in threat_intel:
-            observable = self._safe_text(item.get("observable"))
+            if not isinstance(item, dict):
+                continue
 
-            # Defang analyst-facing observable
+            observable = self._safe_text(
+                item.get("observable")
+            )
+
+            # Defang analyst-facing observable.
             observable = observable.replace(".", "[.]")
 
-            verdict = self._safe_text(item.get("verdict"))
-            risk_score = f"{item.get('combined_risk_score', 0)} / 100"
+            verdict = self._safe_text(
+                item.get("verdict")
+            )
+
+            risk_score = (
+                f"{item.get('combined_risk_score', 0)} / 100"
+            )
 
             provider_lines: list[str] = []
 
             providers = item.get("providers", [])
+
             if not isinstance(providers, list):
                 providers = []
 
@@ -216,8 +239,13 @@ class PDFReportGenerator:
                 if not isinstance(provider, dict):
                     continue
 
-                provider_name = self._safe_text(provider.get("provider"))
-                provider_status = self._safe_text(provider.get("status"))
+                provider_name = self._safe_text(
+                    provider.get("provider")
+                )
+
+                provider_status = self._safe_text(
+                    provider.get("status")
+                )
 
                 provider_lines.append(
                     f"{provider_name} ({provider_status})"
@@ -231,29 +259,55 @@ class PDFReportGenerator:
 
             rows.append(
                 [
-                    Paragraph(observable, self.styles["SmallText"]),
-                    Paragraph(verdict, self.styles["SmallText"]),
-                    Paragraph(risk_score, self.styles["SmallText"]),
-                    Paragraph(provider_text, self.styles["SmallText"]),
+                    Paragraph(
+                        observable,
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        verdict,
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        risk_score,
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        provider_text,
+                        self.styles["SmallText"],
+                    ),
                 ]
             )
 
         if len(rows) == 1:
             rows.append(
                 [
-                    Paragraph("No observables", self.styles["SmallText"]),
+                    Paragraph(
+                        "No observables",
+                        self.styles["SmallText"],
+                    ),
                     Paragraph(
                         "No threat-intelligence results were available.",
                         self.styles["SmallText"],
                     ),
-                    Paragraph("0 / 100", self.styles["SmallText"]),
-                    Paragraph("Not available", self.styles["SmallText"]),
+                    Paragraph(
+                        "0 / 100",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        "Not available",
+                        self.styles["SmallText"],
+                    ),
                 ]
             )
 
         table = Table(
             rows,
-            colWidths=[38 * mm, 55 * mm, 25 * mm, 52 * mm],
+            colWidths=[
+                38 * mm,
+                55 * mm,
+                25 * mm,
+                52 * mm,
+            ],
             repeatRows=1,
             hAlign="LEFT",
         )
@@ -267,7 +321,12 @@ class PDFReportGenerator:
                         (-1, 0),
                         colors.HexColor("#263238"),
                     ),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    (
+                        "TEXTCOLOR",
+                        (0, 0),
+                        (-1, 0),
+                        colors.white,
+                    ),
                     (
                         "GRID",
                         (0, 0),
@@ -275,11 +334,391 @@ class PDFReportGenerator:
                         0.35,
                         colors.HexColor("#B0BEC5"),
                     ),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-                    ("TOPPADDING", (0, 0), (-1, -1), 6),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        6,
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        6,
+                    ),
+                ]
+            )
+        )
+
+        return table
+
+    def _correlation_matches_table(
+        self,
+        matches: list[dict[str, Any]],
+    ) -> Table:
+        rows = [
+            [
+                Paragraph(
+                    "<b>Incident ID</b>",
+                    self.styles["SmallText"],
+                ),
+                Paragraph(
+                    "<b>Similarity</b>",
+                    self.styles["SmallText"],
+                ),
+                Paragraph(
+                    "<b>Match Level</b>",
+                    self.styles["SmallText"],
+                ),
+                Paragraph(
+                    "<b>Shared Evidence</b>",
+                    self.styles["SmallText"],
+                ),
+            ]
+        ]
+
+        if not isinstance(matches, list):
+            matches = []
+
+        for match in matches:
+            if not isinstance(match, dict):
+                continue
+
+            evidence = match.get("evidence", [])
+
+            if not isinstance(evidence, list):
+                evidence = []
+
+            evidence_text = (
+                "<br/>".join(
+                    self._safe_text(item)
+                    for item in evidence
+                )
+                if evidence
+                else "No shared evidence"
+            )
+
+            rows.append(
+                [
+                    Paragraph(
+                        self._safe_text(
+                            match.get("incident_id")
+                        ),
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        (
+                            f"{match.get('similarity_score', 0)}%"
+                        ),
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        self._safe_text(
+                            match.get("match_level")
+                        ),
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        evidence_text,
+                        self.styles["SmallText"],
+                    ),
+                ]
+            )
+
+        if len(rows) == 1:
+            rows.append(
+                [
+                    Paragraph(
+                        "No match",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        "0%",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        "NONE",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        "No historical incident met the correlation threshold.",
+                        self.styles["SmallText"],
+                    ),
+                ]
+            )
+
+        table = Table(
+            rows,
+            colWidths=[
+                35 * mm,
+                25 * mm,
+                28 * mm,
+                82 * mm,
+            ],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#263238"),
+                    ),
+                    (
+                        "TEXTCOLOR",
+                        (0, 0),
+                        (-1, 0),
+                        colors.white,
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.35,
+                        colors.HexColor("#B0BEC5"),
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                ]
+            )
+        )
+
+        return table
+
+    def _ioc_history_table(
+        self,
+        timelines: list[dict[str, Any]],
+    ) -> Table:
+        rows = [
+            [
+                Paragraph(
+                    "<b>IOC</b>",
+                    self.styles["SmallText"],
+                ),
+                Paragraph(
+                    "<b>Type</b>",
+                    self.styles["SmallText"],
+                ),
+                Paragraph(
+                    "<b>Occurrences</b>",
+                    self.styles["SmallText"],
+                ),
+                Paragraph(
+                    "<b>First Seen</b>",
+                    self.styles["SmallText"],
+                ),
+                Paragraph(
+                    "<b>Last Seen</b>",
+                    self.styles["SmallText"],
+                ),
+                Paragraph(
+                    "<b>Repeat</b>",
+                    self.styles["SmallText"],
+                ),
+            ]
+        ]
+
+        if not isinstance(timelines, list):
+            timelines = []
+
+        for item in timelines:
+            if not isinstance(item, dict):
+                continue
+
+            ioc_value = self._safe_text(
+                item.get("ioc")
+            )
+
+            # Defang IOC before showing it in the PDF.
+            ioc_value = ioc_value.replace(".", "[.]")
+
+            rows.append(
+                [
+                    Paragraph(
+                        ioc_value,
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        self._safe_text(
+                            item.get("ioc_type_filter")
+                        ),
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        self._safe_text(
+                            item.get("occurrence_count", 0)
+                        ),
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        self._safe_text(
+                            item.get("first_seen")
+                        ),
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        self._safe_text(
+                            item.get("last_seen")
+                        ),
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        (
+                            "YES"
+                            if item.get("is_repeat_offender")
+                            else "NO"
+                        ),
+                        self.styles["SmallText"],
+                    ),
+                ]
+            )
+
+        if len(rows) == 1:
+            rows.append(
+                [
+                    Paragraph(
+                        "No IOC history",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        "N/A",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        "0",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        "Not available",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        "Not available",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        "NO",
+                        self.styles["SmallText"],
+                    ),
+                ]
+            )
+
+        table = Table(
+            rows,
+            colWidths=[
+                42 * mm,
+                23 * mm,
+                22 * mm,
+                32 * mm,
+                32 * mm,
+                19 * mm,
+            ],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#263238"),
+                    ),
+                    (
+                        "TEXTCOLOR",
+                        (0, 0),
+                        (-1, 0),
+                        colors.white,
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.35,
+                        colors.HexColor("#B0BEC5"),
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        4,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        4,
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
                 ]
             )
         )
@@ -294,8 +733,10 @@ class PDFReportGenerator:
         mitre_candidates: list[dict[str, Any]] | None = None,
         threat_intel: list[dict[str, Any]] | None = None,
         source_log: str | Path | None = None,
+        memory_context: dict[str, Any] | None = None,
     ) -> Path:
         threat_intel = threat_intel or []
+        memory_context = memory_context or {}
 
         created_at = datetime.now()
         attack_type = self._safe_text(analysis.get("attack_type"))
@@ -361,6 +802,12 @@ class PDFReportGenerator:
 
         story.append(Paragraph("Incident Overview", self.styles["SectionHeading"]))
         overview_rows = [
+            (
+                "Incident ID",
+                self._safe_text(
+                    analysis.get("incident_id")
+                ),
+            ),
             ("Attack Type", attack_type),
             ("Summary", self._safe_text(analysis.get("summary"))),
             ("Recommended Tool", self._safe_text(analysis.get("recommended_tool"))),
@@ -427,6 +874,181 @@ class PDFReportGenerator:
         story.append(
             self._threat_intel_table(threat_intel)
         )
+
+        correlation = memory_context.get(
+            "correlation",
+            {},
+        )
+
+        if not isinstance(correlation, dict):
+            correlation = {}
+
+        story.append(
+            Paragraph(
+                "Historical Correlation",
+                self.styles["SectionHeading"],
+            )
+        )
+
+        correlation_rows = [
+            (
+                "Current Incident ID",
+                self._safe_text(
+                    memory_context.get("incident_id")
+                ),
+            ),
+            (
+                "Historical Incidents Checked",
+                self._safe_text(
+                    correlation.get(
+                        "historical_incidents_checked",
+                        0,
+                    )
+                ),
+            ),
+            (
+                "Historical Match Found",
+                (
+                    "YES"
+                    if correlation.get("has_historical_match")
+                    else "NO"
+                ),
+            ),
+            (
+                "Matching Incidents",
+                self._safe_text(
+                    correlation.get(
+                        "matching_incidents_found",
+                        0,
+                    )
+                ),
+            ),
+            (
+                "Highest Similarity Score",
+                (
+                    f"{correlation.get('highest_similarity_score', 0)}%"
+                ),
+            ),
+        ]
+
+        story.append(
+            self._key_value_table(
+                correlation_rows
+            )
+        )
+
+        story.append(Spacer(1, 6))
+
+        story.append(
+            self._correlation_matches_table(
+                correlation.get("matches", [])
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "IOC Historical Timeline",
+                self.styles["SectionHeading"],
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "This table records historical IOC sightings, including "
+                "first seen, last seen, occurrence count, and repeat-offender status.",
+                self.styles["ReportBody"],
+            )
+        )
+
+        story.append(
+            self._ioc_history_table(
+                memory_context.get(
+                    "ioc_timelines",
+                    [],
+                )
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "MITRE Technique History",
+                self.styles["SectionHeading"],
+            )
+        )
+
+        mitre_timelines = memory_context.get(
+            "mitre_timelines",
+            [],
+        )
+
+        if not isinstance(mitre_timelines, list):
+            mitre_timelines = []
+
+        if mitre_timelines:
+            for mitre_history in mitre_timelines:
+                if not isinstance(mitre_history, dict):
+                    continue
+
+                story.append(
+                    self._key_value_table(
+                        [
+                            (
+                                "Technique ID",
+                                self._safe_text(
+                                    mitre_history.get(
+                                        "technique_id"
+                                    )
+                                ),
+                            ),
+                            (
+                                "Occurrences",
+                                self._safe_text(
+                                    mitre_history.get(
+                                        "occurrence_count",
+                                        0,
+                                    )
+                                ),
+                            ),
+                            (
+                                "Repeated Technique",
+                                (
+                                    "YES"
+                                    if mitre_history.get(
+                                        "is_repeated"
+                                    )
+                                    else "NO"
+                                ),
+                            ),
+                            (
+                                "First Seen",
+                                self._safe_text(
+                                    mitre_history.get(
+                                        "first_seen"
+                                    )
+                                ),
+                            ),
+                            (
+                                "Last Seen",
+                                self._safe_text(
+                                    mitre_history.get(
+                                        "last_seen"
+                                    )
+                                ),
+                            ),
+                        ]
+                    )
+                )
+
+                story.append(
+                    Spacer(1, 6)
+                )
+        else:
+            story.append(
+                Paragraph(
+                    "No trusted MITRE technique was available for historical analysis.",
+                    self.styles["ReportBody"],
+                )
+            )
 
         if mitre_candidates:
             story.append(Paragraph("MITRE Candidate Evidence", self.styles["SectionHeading"]))

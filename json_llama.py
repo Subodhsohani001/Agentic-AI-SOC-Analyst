@@ -10,6 +10,9 @@ from ioc_formatter import IOCFormatter
 from report_generator import PDFReportGenerator
 from policy_engine import PolicyEngine
 from threat_intel import ThreatIntelClient
+from memory.incident_store import IncidentStore
+from memory.correlation_engine import CorrelationEngine
+from memory.timeline import IncidentTimeline
 
 
 ALLOWED_SEVERITIES = {"Low", "Medium", "High", "Critical"}
@@ -514,7 +517,93 @@ class SOCOrchestrator:
         self.policy_engine = PolicyEngine()
         self.threat_intel = ThreatIntelClient()
         self.response_agent = ResponseAgent()
+
+        self.incident_store = IncidentStore()
+        self.correlation_engine = CorrelationEngine(
+            incident_store=self.incident_store
+        )
+        self.incident_timeline = IncidentTimeline(
+            incident_store=self.incident_store
+        )
+
         self.report_generator = PDFReportGenerator("reports")
+
+    @staticmethod
+    def _calculate_incident_risk(
+        threat_intel_results: list[dict[str, Any]],
+    ) -> int:
+        scores: list[int] = []
+
+        for item in threat_intel_results:
+            if not isinstance(item, dict):
+                continue
+
+            score = item.get("combined_risk_score", 0)
+
+            if isinstance(score, bool):
+                continue
+
+            if isinstance(score, (int, float)):
+                scores.append(
+                    int(min(max(score, 0), 100))
+                )
+
+        return max(scores, default=0)
+
+    @staticmethod
+    def _build_memory_incident(
+        validated: dict[str, Any],
+        facts: dict[str, list[str]],
+        trusted_mitre: dict[str, str],
+        threat_intel_results: list[dict[str, Any]],
+        source_log: str | Path | None,
+    ) -> dict[str, Any]:
+        technique_id = trusted_mitre.get(
+            "technique_id",
+            "Unknown",
+        )
+
+        mitre_techniques = (
+            [technique_id]
+            if technique_id != "Unknown"
+            else []
+        )
+
+        detections = sorted(
+            {
+                value
+                for value in (
+                    trusted_mitre.get("attack_type"),
+                    trusted_mitre.get("technique_name"),
+                )
+                if value and value != "Unknown"
+            }
+        )
+
+        return {
+            "source": (
+                str(source_log)
+                if source_log is not None
+                else "Unknown source"
+            ),
+            "iocs": {
+                "ips": facts.get("ip_addresses", []),
+                "domains": facts.get("domains", []),
+                "urls": facts.get("urls", []),
+                "hashes": facts.get("hashes", []),
+                "emails": facts.get("email_addresses", []),
+                "files": facts.get("file_names", []),
+            },
+            "mitre": mitre_techniques,
+            "risk_score": SOCOrchestrator._calculate_incident_risk(
+                threat_intel_results
+            ),
+            "severity": validated.get(
+                "severity",
+                "Unknown",
+            ).upper(),
+            "detections": detections,
+        }
 
     def process(
         self,
@@ -542,8 +631,73 @@ class SOCOrchestrator:
         validated["recommended_tool"] = policy_decision.recommended_tool
         validated["policy_reason"] = policy_decision.reason
 
+        # Build the current incident before saving.
+        memory_incident = self._build_memory_incident(
+            validated=validated,
+            facts=facts,
+            trusted_mitre=trusted_mitre,
+            threat_intel_results=threat_intel_results,
+            source_log=source_log,
+        )
+
+        # Correlate only against historical incidents.
+        correlation_result = self.correlation_engine.correlate_incident(
+            memory_incident,
+            minimum_score=1,
+            maximum_results=5,
+        )
+
+        memory_incident["correlation"] = correlation_result
+
+        # Save current incident after correlation.
+        saved_incident = self.incident_store.save_incident(
+            memory_incident
+        )
+
+        # Build IOC timelines including the current incident.
+        ioc_timelines: list[dict[str, Any]] = []
+
+        for ioc_type, values in saved_incident.get("iocs", {}).items():
+            if not isinstance(values, list):
+                continue
+
+            for ioc_value in values:
+                ioc_timelines.append(
+                    self.incident_timeline.build_ioc_timeline(
+                        str(ioc_value),
+                        ioc_type=ioc_type,
+                    )
+                )
+
+        # Build MITRE timelines.
+        mitre_timelines: list[dict[str, Any]] = []
+
+        for technique_id in saved_incident.get("mitre", []):
+            mitre_timelines.append(
+                self.incident_timeline.build_mitre_timeline(
+                    str(technique_id)
+                )
+            )
+
+        memory_context = {
+            "incident_id": saved_incident["incident_id"],
+            "timestamp": saved_incident["timestamp"],
+            "risk_score": saved_incident.get("risk_score", 0),
+            "correlation": correlation_result,
+            "ioc_timelines": ioc_timelines,
+            "mitre_timelines": mitre_timelines,
+            "repeat_offenders": [
+                timeline
+                for timeline in ioc_timelines
+                if timeline.get("is_repeat_offender")
+            ],
+        }
+
+        validated["incident_id"] = saved_incident["incident_id"]
+        validated["historical_correlation"] = correlation_result
+
         tool_output = self.response_agent.execute(validated)
-        
+
         report_path = self.report_generator.generate(
             analysis=validated,
             profile=profile.__dict__,
@@ -551,8 +705,8 @@ class SOCOrchestrator:
             mitre_candidates=candidates,
             threat_intel=threat_intel_results,
             source_log=source_log,
+            memory_context=memory_context,
         )
-        
 
         return {
             "profile": profile.__dict__,
@@ -560,9 +714,11 @@ class SOCOrchestrator:
             "analysis": validated,
             "display_facts": display_facts,
             "threat_intel": threat_intel_results,
+            "memory": memory_context,
             "tool_output": tool_output,
             "report_path": str(report_path),
         }
+        
 
 
 # =========================================================
@@ -598,7 +754,10 @@ def main() -> None:
         print("\n🐍 Profiling the log and extracting trusted evidence...")
 
         orchestrator = SOCOrchestrator("mitre_knowledge.json", model="llama3.2")
-        result = orchestrator.process(log, source_log=file_path,)
+        result = orchestrator.process(
+            log, 
+            source_log=file_path,
+        )
 
         print("\n========== LOG PROFILE ==========\n")
         print(json.dumps(result["profile"], indent=4))
@@ -617,6 +776,24 @@ def main() -> None:
 
         print("\n========== THREAT INTELLIGENCE ==========\n")
         print(json.dumps(result["threat_intel"], indent=4, sort_keys=True))
+
+        print("\n========== INCIDENT MEMORY ==========\n")
+        print(
+            json.dumps(
+                result["memory"],
+                indent=4,
+                sort_keys=True,
+            )
+        )
+
+        print("\n========== HISTORICAL CORRELATION ==========\n")
+        print(
+            json.dumps(
+                result["memory"]["correlation"],
+                indent=4,
+                sort_keys=True,
+            )
+        )
 
         print("\n========== TOOL OUTPUT ==========\n")
         print(result["tool_output"])

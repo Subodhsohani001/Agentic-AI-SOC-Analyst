@@ -1,4 +1,93 @@
 {
-  "schema_version": "1.0",
-  "incidents" : []
+  "incidents": [
+    {
+      "correlation": {
+        "has_historical_match": false,
+        "highest_similarity_score": 0.0,
+        "historical_incidents_checked": 0,
+        "matches": [],
+        "matching_incidents_found": 0
+      },
+      "detections": [
+        "Brute Force",
+        "brute force"
+      ],
+      "incident_id": "INC-2026-0001",
+      "iocs": {
+        "domains": [],
+        "emails": [],
+        "files": [],
+        "hashes": [],
+        "ips": [
+          "192.168.1.45"
+        ],
+        "urls": []
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "risk_score": 0,
+      "severity": "MEDIUM",
+      "source": "logs\\bruteforce.log",
+      "timestamp": "2026-07-12T20:01:12+00:00"
+    },
+    {
+      "correlation": {
+        "has_historical_match": true,
+        "highest_similarity_score": 100.0,
+        "historical_incidents_checked": 1,
+        "matches": [
+          {
+            "evidence": [
+              "1 shared IOC value(s)",
+              "1 shared MITRE technique(s)",
+              "1 shared detection(s)"
+            ],
+            "incident_id": "INC-2026-0001",
+            "match_level": "VERY_HIGH",
+            "shared_detection_count": 1,
+            "shared_detections": [
+              "brute force"
+            ],
+            "shared_ioc_count": 1,
+            "shared_iocs": {
+              "ips": [
+                "192.168.1.45"
+              ]
+            },
+            "shared_mitre": [
+              "T1110"
+            ],
+            "shared_mitre_count": 1,
+            "similarity_score": 100.0,
+            "timestamp": "2026-07-12T20:01:12+00:00"
+          }
+        ],
+        "matching_incidents_found": 1
+      },
+      "detections": [
+        "Brute Force",
+        "brute force"
+      ],
+      "incident_id": "INC-2026-0002",
+      "iocs": {
+        "domains": [],
+        "emails": [],
+        "files": [],
+        "hashes": [],
+        "ips": [
+          "192.168.1.45"
+        ],
+        "urls": []
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "risk_score": 0,
+      "severity": "MEDIUM",
+      "source": "logs\\bruteforce.log",
+      "timestamp": "2026-07-12T20:02:00+00:00"
+    }
+  ],
+  "schema_version": "1.0"
 }
