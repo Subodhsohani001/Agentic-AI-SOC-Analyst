@@ -1,0 +1,29 @@
+{
+  "incidents": [
+    {
+      "detections": [
+        "Suspicious PowerShell execution",
+        "Outbound connection to suspicious IP"
+      ],
+      "incident_id": "INC-2026-0001",
+      "iocs": {
+        "domains": [
+          "malicious-example.test"
+        ],
+        "hashes": [],
+        "ips": [
+          "185.220.101.45"
+        ]
+      },
+      "mitre": [
+        "T1059",
+        "T1071.001"
+      ],
+      "risk_score": 82,
+      "severity": "HIGH",
+      "source": "unit-test",
+      "timestamp": "2026-07-12T17:52:39+00:00"
+    }
+  ],
+  "schema_version": "1.0"
+}
