@@ -1,16 +1,38 @@
-# Generated reports
+# ==========================
+# Generated Reports
+# ==========================
 reports/
 
-# Python cache
-__pycache__/
-*.pyc
+# ==========================
+# Threat Intelligence Cache
+# ==========================
+cache/*.json
 
-# Virtual environments
+# ==========================
+# Environment Variables
+# ==========================
+.env
+
+# ==========================
+# Python Cache
+# ==========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ==========================
+# Virtual Environments
+# ==========================
 .venv/
 venv/
 
-# VS Code settings (optional)
+# ==========================
+# VS Code Settings
+# ==========================
 .vscode/
 
+# ==========================
+# Temporary / Backup Files
+# ==========================
 json_llama_backup.py
 json_llama_backup_working.py
