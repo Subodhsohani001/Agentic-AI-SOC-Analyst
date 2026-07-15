@@ -9,7 +9,18 @@ from typing import Any
 from ioc_formatter import IOCFormatter
 from report_generator import PDFReportGenerator
 from policy_engine import PolicyEngine
-from threat_intel import ThreatIntelClient
+from threat_intel import ThreatIntelClient as LocalThreatClient
+
+from threat_intelligence import (
+    AbuseIPDBClient,
+    AbuseIPDBError,
+    IntelligenceCorrelator,
+    IntelligenceSummaryBuilder,
+    ReputationEngine,
+    VirusTotalClient,
+    VirusTotalError,
+)
+
 from memory.incident_store import IncidentStore
 from memory.correlation_engine import CorrelationEngine
 from memory.timeline import IncidentTimeline
@@ -515,7 +526,15 @@ class SOCOrchestrator:
         self.threat_agent = ThreatAnalystAgent(OllamaClient(model))
         self.validator = ValidationEngine()
         self.policy_engine = PolicyEngine()
-        self.threat_intel = ThreatIntelClient()
+        self.local_threat_intel = LocalThreatClient()
+
+        # v0.5.0 external threat-intelligence subsystem.
+        self.virustotal_client = VirusTotalClient()
+        self.abuseipdb_client = AbuseIPDBClient()
+        self.reputation_engine = ReputationEngine()
+        self.intelligence_correlator = IntelligenceCorrelator()
+        self.intelligence_summary_builder = IntelligenceSummaryBuilder()
+        
         self.response_agent = ResponseAgent()
 
         self.incident_store = IncidentStore()
@@ -538,7 +557,15 @@ class SOCOrchestrator:
             if not isinstance(item, dict):
                 continue
 
-            score = item.get("combined_risk_score", 0)
+            summary = item.get("summary")
+
+            if isinstance(summary, dict):
+                score = summary.get("risk_score", 0)
+            else:
+                score = item.get(
+                    "risk_score",
+                    item.get("combined_risk_score", 0),
+                )
 
             if isinstance(score, bool):
                 continue
@@ -549,6 +576,224 @@ class SOCOrchestrator:
                 )
 
         return max(scores, default=0)
+    
+    @staticmethod
+    def _ioc_memory_type(fact_type: str) -> str | None:
+        """Map extracted-fact IOC names to incident-memory IOC names."""
+        mapping = {
+            "ip_addresses": "ips",
+            "domains": "domains",
+            "urls": "urls",
+            "hashes": "hashes",
+        }
+
+        return mapping.get(fact_type)
+
+    def _build_ioc_history(
+        self,
+        ioc: str,
+        ioc_type: str,
+    ) -> dict[str, Any]:
+        """Build reputation-compatible history from incident memory."""
+        timeline = self.incident_timeline.build_ioc_timeline(
+            ioc,
+            ioc_type=ioc_type,
+        )
+
+        if not isinstance(timeline, dict):
+            return {
+                "occurrence_count": 0,
+                "is_repeat_offender": False,
+                "incidents": [],
+            }
+
+        raw_occurrences = timeline.get(
+            "timeline",
+            timeline.get("occurrences", []),
+        )
+
+        occurrences = (
+            [
+                occurrence
+                for occurrence in raw_occurrences
+                if isinstance(occurrence, dict)
+            ]
+            if isinstance(raw_occurrences, list)
+            else []
+        )
+
+        historical_risks = [
+            int(occurrence.get("risk_score", 0))
+            for occurrence in occurrences
+            if isinstance(occurrence.get("risk_score"), (int, float))
+            and not isinstance(occurrence.get("risk_score"), bool)
+        ]
+
+        return {
+            "occurrence_count": int(
+                timeline.get("occurrence_count", len(occurrences))
+            ),
+            "is_repeat_offender": bool(
+                timeline.get("is_repeat_offender", False)
+            ),
+            "first_seen": timeline.get("first_seen"),
+            "last_seen": timeline.get("last_seen"),
+            "highest_historical_risk_score": (
+                max(historical_risks)
+                if historical_risks
+                else 0
+            ),
+            "incidents": occurrences,
+        }
+
+
+    def _enrich_observable(
+        self,
+        ioc: str,
+        fact_type: str,
+        history: dict[str, Any],
+        validated: dict[str, Any],
+        trusted_mitre: dict[str, str],
+    ) -> dict[str, Any]:
+        """Run the complete deterministic v0.5.0 pipeline for one IOC."""
+        virustotal_result: dict[str, Any] | None = None
+        abuseipdb_result: dict[str, Any] | None = None
+        provider_errors: list[str] = []
+
+        try:
+            virustotal_result = self.virustotal_client.lookup(ioc)
+        except (VirusTotalError, ValueError, TypeError) as exc:
+            provider_errors.append(
+                f"VirusTotal enrichment failed: {exc}"
+            )
+
+        if fact_type == "ip_addresses":
+            try:
+                abuseipdb_result = self.abuseipdb_client.lookup(ioc)
+            except (AbuseIPDBError, ValueError, TypeError) as exc:
+                provider_errors.append(
+                    f"AbuseIPDB enrichment skipped or failed: {exc}"
+                )
+
+        technique_id = trusted_mitre.get(
+            "technique_id",
+            "Unknown",
+        )
+
+        detections = sorted(
+            {
+                value
+                for value in (
+                    trusted_mitre.get("attack_type"),
+                    trusted_mitre.get("technique_name"),
+                )
+                if value and value != "Unknown"
+            }
+        )
+
+        local_evidence = {
+            "severity": validated.get("severity", "Medium"),
+            "confidence": validated.get("confidence", "Low"),
+            "detection_count": len(detections),
+        }
+
+        reputation = self.reputation_engine.evaluate(
+            ioc=ioc,
+            virustotal=virustotal_result,
+            abuseipdb=abuseipdb_result,
+            history=history,
+            local_evidence=local_evidence,
+        )
+
+        current_incident = {
+            "risk_score": reputation["risk_score"],
+            "severity": validated.get("severity"),
+            "confidence": validated.get("confidence"),
+            "mitre_ids": (
+                [technique_id]
+                if technique_id != "Unknown"
+                else []
+            ),
+            "detections": detections,
+        }
+
+        correlation = self.intelligence_correlator.correlate(
+            ioc=ioc,
+            reputation=reputation,
+            history=history,
+            current_incident=current_incident,
+            virustotal=virustotal_result,
+            abuseipdb=abuseipdb_result,
+        )
+
+        summary = self.intelligence_summary_builder.build(
+            ioc=ioc,
+            reputation=reputation,
+            correlation=correlation,
+            virustotal=virustotal_result,
+            abuseipdb=abuseipdb_result,
+        )
+
+        return {
+            "ioc": ioc,
+            "ioc_type": fact_type,
+            "virustotal": virustotal_result,
+            "abuseipdb": abuseipdb_result,
+            "reputation": reputation,
+            "correlation": correlation,
+            "summary": summary,
+            "provider_errors": provider_errors,
+        }
+
+    def _run_threat_intelligence_pipeline(
+        self,
+        facts: dict[str, list[str]],
+        validated: dict[str, Any],
+        trusted_mitre: dict[str, str],
+    ) -> list[dict[str, Any]]:
+        """Enrich supported IOCs without allowing one failure to stop analysis."""
+        results: list[dict[str, Any]] = []
+
+        supported_fact_types = (
+            "ip_addresses",
+            "domains",
+            "urls",
+            "hashes",
+        )
+
+        for fact_type in supported_fact_types:
+            memory_type = self._ioc_memory_type(fact_type)
+
+            if memory_type is None:
+                continue
+
+            values = facts.get(fact_type, [])
+
+            if not isinstance(values, list):
+                continue
+
+            for value in values:
+                if not isinstance(value, str) or not value.strip():
+                    continue
+
+                normalized_value = value.strip()
+
+                history = self._build_ioc_history(
+                    ioc=normalized_value,
+                    ioc_type=memory_type,
+                )
+
+                result = self._enrich_observable(
+                    ioc=normalized_value,
+                    fact_type=fact_type,
+                    history=history,
+                    validated=validated,
+                    trusted_mitre=trusted_mitre,
+                )
+
+                results.append(result)
+
+        return results
 
     @staticmethod
     def _build_memory_incident(
@@ -612,7 +857,9 @@ class SOCOrchestrator:
     ) -> dict[str, Any]:
         profile = self.profiler.profile(log_data)
         facts = self.ioc_agent.extract(log_data)
-        threat_intel_results = self.threat_intel.enrich_facts(facts)
+        legacy_threat_intel_results = (
+            self.local_threat_intel.enrich_facts(facts)
+        )
         display_facts = self.ioc_formatter.format_facts(facts)
         candidates = self.mitre_agent.retrieve_candidates(log_data)
         trusted_mitre = self.mitre_agent.select_trusted(candidates)
@@ -631,12 +878,23 @@ class SOCOrchestrator:
         validated["recommended_tool"] = policy_decision.recommended_tool
         validated["policy_reason"] = policy_decision.reason
 
+        # v0.5.0 deterministic external threat-intelligence investigation.
+        intelligence_results = (
+            self._run_threat_intelligence_pipeline(
+                facts=facts,
+                validated=validated,
+                trusted_mitre=trusted_mitre,
+            )
+        )
+
+        validated["threat_intelligence"] = intelligence_results
+
         # Build the current incident before saving.
         memory_incident = self._build_memory_incident(
             validated=validated,
             facts=facts,
             trusted_mitre=trusted_mitre,
-            threat_intel_results=threat_intel_results,
+            threat_intel_results=intelligence_results,
             source_log=source_log,
         )
 
@@ -703,7 +961,8 @@ class SOCOrchestrator:
             profile=profile.__dict__,
             display_facts=display_facts,
             mitre_candidates=candidates,
-            threat_intel=threat_intel_results,
+            threat_intel=legacy_threat_intel_results,
+            intelligence_results=intelligence_results,
             source_log=source_log,
             memory_context=memory_context,
         )
@@ -713,7 +972,8 @@ class SOCOrchestrator:
             "mitre_candidates": candidates,
             "analysis": validated,
             "display_facts": display_facts,
-            "threat_intel": threat_intel_results,
+            "threat_intel": legacy_threat_intel_results,
+            "intelligence_results": intelligence_results,
             "memory": memory_context,
             "tool_output": tool_output,
             "report_path": str(report_path),
@@ -774,8 +1034,17 @@ def main() -> None:
         print("\n========== VALIDATED SOC ANALYSIS ==========\n")
         print(json.dumps(result["analysis"], indent=4, sort_keys=True))
 
-        print("\n========== THREAT INTELLIGENCE ==========\n")
+        print("\n========== LOCAL THREAT INTELLIGENCE ==========\n")
         print(json.dumps(result["threat_intel"], indent=4, sort_keys=True))
+
+        print("\n========== v0.5.0 INTELLIGENCE INVESTIGATION ==========\n")
+        print(
+            json.dumps(
+                result["intelligence_results"],
+                indent=4,
+                sort_keys=True,
+            )
+        )
 
         print("\n========== INCIDENT MEMORY ==========\n")
         print(

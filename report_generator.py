@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 import re
+from html import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
@@ -80,7 +81,21 @@ class PDFReportGenerator:
         if value is None:
             return "Not available"
         text = str(value).strip()
-        return text or "Not available"
+
+        if not text:
+            return "Not Available"
+        return escape(text, quote=True)
+    
+    @classmethod
+    def _defang_observable(cls, value: Any) -> str:
+        """Return an analyst-safe representation of an observable."""
+        text = cls._safe_text(value)
+
+        text = text.replace("https://", "hxxps://")
+        text = text.replace("http://", "hxxp://")
+        text = text.replace(".", "[.]")
+
+        return text
 
     @staticmethod
     def _slugify(value: str) -> str:
@@ -185,96 +200,265 @@ class PDFReportGenerator:
         return table
     
     def _threat_intel_table(
+            self,
+            threat_intel: list[dict[str, Any]],
+        ) -> Table:
+            rows = [
+                [
+                    Paragraph(
+                        "<b>Observable</b>",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        "<b>Verdict</b>",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        "<b>Risk Score</b>",
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        "<b>Provider Status</b>",
+                        self.styles["SmallText"],
+                    ),
+                ]
+            ]
+
+            for item in threat_intel:
+                if not isinstance(item, dict):
+                    continue
+
+                observable = self._defang_observable(
+                    item.get("observable")
+                )
+
+                verdict = self._safe_text(
+                    item.get("verdict")
+                )
+
+                risk_score = (
+                    f"{item.get('combined_risk_score', 0)} / 100"
+                )
+
+                provider_lines: list[str] = []
+
+                providers = item.get("providers", [])
+
+                if not isinstance(providers, list):
+                    providers = []
+
+                for provider in providers:
+                    if not isinstance(provider, dict):
+                        continue
+
+                    provider_name = self._safe_text(
+                        provider.get("provider")
+                    )
+
+                    provider_status = self._safe_text(
+                        provider.get("status")
+                    )
+
+                    provider_lines.append(
+                        f"{provider_name} ({provider_status})"
+                    )
+
+                provider_text = (
+                    "<br/>".join(provider_lines)
+                    if provider_lines
+                    else "No provider results"
+                )
+
+                rows.append(
+                    [
+                        Paragraph(
+                            observable,
+                            self.styles["SmallText"],
+                        ),
+                        Paragraph(
+                            verdict,
+                            self.styles["SmallText"],
+                        ),
+                        Paragraph(
+                            risk_score,
+                            self.styles["SmallText"],
+                        ),
+                        Paragraph(
+                            provider_text,
+                            self.styles["SmallText"],
+                        ),
+                    ]
+                )
+
+            if len(rows) == 1:
+                rows.append(
+                    [
+                        Paragraph(
+                            "No observables",
+                            self.styles["SmallText"],
+                        ),
+                        Paragraph(
+                            "No threat-intelligence results were available.",
+                            self.styles["SmallText"],
+                        ),
+                        Paragraph(
+                            "0 / 100",
+                            self.styles["SmallText"],
+                        ),
+                        Paragraph(
+                            "Not available",
+                            self.styles["SmallText"],
+                        ),
+                    ]
+                )
+
+            table = Table(
+                rows,
+                colWidths=[
+                    38 * mm,
+                    55 * mm,
+                    25 * mm,
+                    52 * mm,
+                ],
+                repeatRows=1,
+                hAlign="LEFT",
+            )
+
+            table.setStyle(
+                TableStyle(
+                    [
+                        (
+                            "BACKGROUND",
+                            (0, 0),
+                            (-1, 0),
+                            colors.HexColor("#263238"),
+                        ),
+                        (
+                            "TEXTCOLOR",
+                            (0, 0),
+                            (-1, 0),
+                            colors.white,
+                        ),
+                        (
+                            "GRID",
+                            (0, 0),
+                            (-1, -1),
+                            0.35,
+                            colors.HexColor("#B0BEC5"),
+                        ),
+                        (
+                            "VALIGN",
+                            (0, 0),
+                            (-1, -1),
+                            "TOP",
+                        ),
+                        (
+                            "LEFTPADDING",
+                            (0, 0),
+                            (-1, -1),
+                            5,
+                        ),
+                        (
+                            "RIGHTPADDING",
+                            (0, 0),
+                            (-1, -1),
+                            5,
+                        ),
+                        (
+                            "TOPPADDING",
+                            (0, 0),
+                            (-1, -1),
+                            6,
+                        ),
+                        (
+                            "BOTTOMPADDING",
+                            (0, 0),
+                            (-1, -1),
+                            6,
+                        ),
+                    ]
+                )
+            )
+
+            return table
+
+    def _intelligence_overview_table(
         self,
-        threat_intel: list[dict[str, Any]],
+        intelligence_results: list[dict[str, Any]],
     ) -> Table:
+        """Build the v0.5.0 multi-source intelligence overview table."""
         rows = [
             [
-                Paragraph(
-                    "<b>Observable</b>",
-                    self.styles["SmallText"],
-                ),
-                Paragraph(
-                    "<b>Verdict</b>",
-                    self.styles["SmallText"],
-                ),
-                Paragraph(
-                    "<b>Risk Score</b>",
-                    self.styles["SmallText"],
-                ),
-                Paragraph(
-                    "<b>Provider Status</b>",
-                    self.styles["SmallText"],
-                ),
+                Paragraph("<b>Observable</b>", self.styles["SmallText"]),
+                Paragraph("<b>Risk</b>", self.styles["SmallText"]),
+                Paragraph("<b>Verdict</b>", self.styles["SmallText"]),
+                Paragraph("<b>Correlation</b>", self.styles["SmallText"]),
+                Paragraph("<b>Action</b>", self.styles["SmallText"]),
             ]
         ]
 
-        for item in threat_intel:
+        for item in intelligence_results:
             if not isinstance(item, dict):
                 continue
 
-            observable = self._safe_text(
-                item.get("observable")
+            summary = item.get("summary", {})
+            correlation = item.get("correlation", {})
+
+            if not isinstance(summary, dict):
+                summary = {}
+
+            if not isinstance(correlation, dict):
+                correlation = {}
+
+            observable = self._defang_observable(
+                item.get("ioc", item.get("observable"))
             )
 
-            # Defang analyst-facing observable.
-            observable = observable.replace(".", "[.]")
+            risk_score = self._safe_text(
+                summary.get(
+                    "risk_score",
+                    item.get("reputation", {}).get("risk_score", 0)
+                    if isinstance(item.get("reputation"), dict)
+                    else 0,
+                )
+            )
 
             verdict = self._safe_text(
-                item.get("verdict")
+                summary.get("verdict")
             )
 
-            risk_score = (
-                f"{item.get('combined_risk_score', 0)} / 100"
+            severity = self._safe_text(
+                summary.get("severity")
             )
 
-            provider_lines: list[str] = []
+            match_level = self._safe_text(
+                correlation.get("match_level")
+            )
 
-            providers = item.get("providers", [])
+            priority = self._safe_text(
+                correlation.get("investigation_priority")
+            )
 
-            if not isinstance(providers, list):
-                providers = []
-
-            for provider in providers:
-                if not isinstance(provider, dict):
-                    continue
-
-                provider_name = self._safe_text(
-                    provider.get("provider")
+            action = self._safe_text(
+                summary.get(
+                    "recommended_action",
+                    correlation.get("recommended_action"),
                 )
-
-                provider_status = self._safe_text(
-                    provider.get("status")
-                )
-
-                provider_lines.append(
-                    f"{provider_name} ({provider_status})"
-                )
-
-            provider_text = (
-                "<br/>".join(provider_lines)
-                if provider_lines
-                else "No provider results"
             )
 
             rows.append(
                 [
+                    Paragraph(observable, self.styles["SmallText"]),
                     Paragraph(
-                        observable,
+                        f"{risk_score} / 100<br/>{severity}",
                         self.styles["SmallText"],
                     ),
+                    Paragraph(verdict, self.styles["SmallText"]),
                     Paragraph(
-                        verdict,
+                        f"{match_level}<br/>{priority}",
                         self.styles["SmallText"],
                     ),
-                    Paragraph(
-                        risk_score,
-                        self.styles["SmallText"],
-                    ),
-                    Paragraph(
-                        provider_text,
-                        self.styles["SmallText"],
-                    ),
+                    Paragraph(action, self.styles["SmallText"]),
                 ]
             )
 
@@ -285,28 +469,21 @@ class PDFReportGenerator:
                         "No observables",
                         self.styles["SmallText"],
                     ),
-                    Paragraph(
-                        "No threat-intelligence results were available.",
-                        self.styles["SmallText"],
-                    ),
-                    Paragraph(
-                        "0 / 100",
-                        self.styles["SmallText"],
-                    ),
-                    Paragraph(
-                        "Not available",
-                        self.styles["SmallText"],
-                    ),
+                    Paragraph("0 / 100", self.styles["SmallText"]),
+                    Paragraph("Not available", self.styles["SmallText"]),
+                    Paragraph("NONE", self.styles["SmallText"]),
+                    Paragraph("Manual review", self.styles["SmallText"]),
                 ]
             )
 
         table = Table(
             rows,
             colWidths=[
-                38 * mm,
-                55 * mm,
-                25 * mm,
-                52 * mm,
+                42 * mm,
+                27 * mm,
+                36 * mm,
+                30 * mm,
+                35 * mm,
             ],
             repeatRows=1,
             hAlign="LEFT",
@@ -319,14 +496,9 @@ class PDFReportGenerator:
                         "BACKGROUND",
                         (0, 0),
                         (-1, 0),
-                        colors.HexColor("#263238"),
+                        colors.HexColor("#1B263B"),
                     ),
-                    (
-                        "TEXTCOLOR",
-                        (0, 0),
-                        (-1, 0),
-                        colors.white,
-                    ),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                     (
                         "GRID",
                         (0, 0),
@@ -334,36 +506,11 @@ class PDFReportGenerator:
                         0.35,
                         colors.HexColor("#B0BEC5"),
                     ),
-                    (
-                        "VALIGN",
-                        (0, 0),
-                        (-1, -1),
-                        "TOP",
-                    ),
-                    (
-                        "LEFTPADDING",
-                        (0, 0),
-                        (-1, -1),
-                        5,
-                    ),
-                    (
-                        "RIGHTPADDING",
-                        (0, 0),
-                        (-1, -1),
-                        5,
-                    ),
-                    (
-                        "TOPPADDING",
-                        (0, 0),
-                        (-1, -1),
-                        6,
-                    ),
-                    (
-                        "BOTTOMPADDING",
-                        (0, 0),
-                        (-1, -1),
-                        6,
-                    ),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ]
             )
         )
@@ -529,6 +676,158 @@ class PDFReportGenerator:
                         (-1, -1),
                         5,
                     ),
+                ]
+            )
+        )
+
+        return table
+    
+    def _provider_findings_table(
+        self,
+        intelligence_results: list[dict[str, Any]],
+    ) -> Table:
+        """Display normalized VirusTotal and AbuseIPDB findings."""
+        rows = [
+            [
+                Paragraph("<b>Observable</b>", self.styles["SmallText"]),
+                Paragraph("<b>Provider</b>", self.styles["SmallText"]),
+                Paragraph("<b>Verdict</b>", self.styles["SmallText"]),
+                Paragraph("<b>Key Findings</b>", self.styles["SmallText"]),
+            ]
+        ]
+
+        for item in intelligence_results:
+            if not isinstance(item, dict):
+                continue
+
+            observable = self._defang_observable(
+                item.get("ioc", item.get("observable"))
+            )
+
+            virustotal = item.get("virustotal")
+            abuseipdb = item.get("abuseipdb")
+
+            if isinstance(virustotal, dict):
+                stats = virustotal.get("analysis_stats", {})
+
+                if not isinstance(stats, dict):
+                    stats = {}
+
+                vt_findings = (
+                    f"Malicious engines: "
+                    f"{self._safe_text(stats.get('malicious', 0))}<br/>"
+                    f"Suspicious engines: "
+                    f"{self._safe_text(stats.get('suspicious', 0))}<br/>"
+                    f"Detection ratio: "
+                    f"{self._safe_text(virustotal.get('detection_ratio_percent', 0))}%<br/>"
+                    f"Reputation: "
+                    f"{self._safe_text(virustotal.get('reputation', 0))}"
+                )
+
+                rows.append(
+                    [
+                        Paragraph(observable, self.styles["SmallText"]),
+                        Paragraph("VirusTotal", self.styles["SmallText"]),
+                        Paragraph(
+                            self._safe_text(virustotal.get("verdict")),
+                            self.styles["SmallText"],
+                        ),
+                        Paragraph(vt_findings, self.styles["SmallText"]),
+                    ]
+                )
+
+            if isinstance(abuseipdb, dict):
+                abuse_findings = (
+                    f"Abuse confidence: "
+                    f"{self._safe_text(abuseipdb.get('abuse_confidence_score', 0))}/100<br/>"
+                    f"Whitelisted: "
+                    f"{self._safe_text(abuseipdb.get('is_whitelisted'))}<br/>"
+                    f"Reports: "
+                    f"{self._safe_text(abuseipdb.get('total_reports', 0))}<br/>"
+                    f"ISP: "
+                    f"{self._safe_text(abuseipdb.get('isp'))}"
+                )
+
+                rows.append(
+                    [
+                        Paragraph(observable, self.styles["SmallText"]),
+                        Paragraph("AbuseIPDB", self.styles["SmallText"]),
+                        Paragraph(
+                            self._safe_text(abuseipdb.get("verdict")),
+                            self.styles["SmallText"],
+                        ),
+                        Paragraph(abuse_findings, self.styles["SmallText"]),
+                    ]
+                )
+
+            provider_errors = item.get("provider_errors", [])
+
+            if isinstance(provider_errors, list) and provider_errors:
+                rows.append(
+                    [
+                        Paragraph(observable, self.styles["SmallText"]),
+                        Paragraph(
+                            "Provider status",
+                            self.styles["SmallText"],
+                        ),
+                        Paragraph("Partial", self.styles["SmallText"]),
+                        Paragraph(
+                            "<br/>".join(
+                                self._safe_text(error)
+                                for error in provider_errors
+                            ),
+                            self.styles["SmallText"],
+                        ),
+                    ]
+                )
+
+        if len(rows) == 1:
+            rows.append(
+                [
+                    Paragraph("No observables", self.styles["SmallText"]),
+                    Paragraph("No providers", self.styles["SmallText"]),
+                    Paragraph("Not available", self.styles["SmallText"]),
+                    Paragraph(
+                        "No v0.5.0 provider findings were available.",
+                        self.styles["SmallText"],
+                    ),
+                ]
+            )
+
+        table = Table(
+            rows,
+            colWidths=[
+                42 * mm,
+                28 * mm,
+                35 * mm,
+                65 * mm,
+            ],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#263238"),
+                    ),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.35,
+                        colors.HexColor("#B0BEC5"),
+                    ),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ]
             )
         )
@@ -732,10 +1031,12 @@ class PDFReportGenerator:
         display_facts: dict[str, list[str]],
         mitre_candidates: list[dict[str, Any]] | None = None,
         threat_intel: list[dict[str, Any]] | None = None,
+        intelligence_results: list[dict[str, Any]] | None = None,
         source_log: str | Path | None = None,
         memory_context: dict[str, Any] | None = None,
     ) -> Path:
         threat_intel = threat_intel or []
+        intelligence_results = intelligence_results or []
         memory_context = memory_context or {}
 
         created_at = datetime.now()
@@ -874,6 +1175,117 @@ class PDFReportGenerator:
         story.append(
             self._threat_intel_table(threat_intel)
         )
+
+        story.append(
+            Paragraph(
+                "Deterministic Intelligence Investigation",
+                self.styles["SectionHeading"],
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "This section combines VirusTotal, AbuseIPDB, current detection "
+                "context, and persistent incident memory into a deterministic "
+                "risk assessment. Provider failures are recorded without stopping "
+                "the investigation.",
+                self.styles["ReportBody"],
+            )
+        )
+
+        story.append(
+            self._intelligence_overview_table(
+                intelligence_results
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "External Provider Findings",
+                self.styles["SectionHeading"],
+            )
+        )
+
+        story.append(
+            self._provider_findings_table(
+                intelligence_results
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "Intelligence Summaries and Analyst Guidance",
+                self.styles["SectionHeading"],
+            )
+        )
+
+        if intelligence_results:
+            for item in intelligence_results:
+                if not isinstance(item, dict):
+                    continue
+
+                summary = item.get("summary", {})
+
+                if not isinstance(summary, dict):
+                    continue
+
+                observable = self._defang_observable(
+                    item.get("ioc", item.get("observable"))
+                )
+
+                story.append(
+                    Paragraph(
+                        f"<b>Observable: {observable}</b>",
+                        self.styles["ReportBody"],
+                    )
+                )
+
+                story.append(
+                    Paragraph(
+                        self._safe_text(
+                            summary.get("executive_summary")
+                        ),
+                        self.styles["ReportBody"],
+                    )
+                )
+
+                analyst_notes = summary.get("analyst_notes", [])
+
+                if isinstance(analyst_notes, list):
+                    for note in analyst_notes:
+                        story.append(
+                            Paragraph(
+                                f"• {self._safe_text(note)}",
+                                self.styles["ReportBody"],
+                            )
+                        )
+
+                contradictions = summary.get("contradictions", [])
+
+                if isinstance(contradictions, list) and contradictions:
+                    story.append(
+                        Paragraph(
+                            "<b>Provider contradictions:</b>",
+                            self.styles["ReportBody"],
+                        )
+                    )
+
+                    for contradiction in contradictions:
+                        story.append(
+                            Paragraph(
+                                f"• {self._safe_text(contradiction)}",
+                                self.styles["ReportBody"],
+                            )
+                        )
+
+                story.append(Spacer(1, 6))
+        else:
+            story.append(
+                Paragraph(
+                    "No v0.5.0 intelligence summaries were produced.",
+                    self.styles["ReportBody"],
+                )
+            )
 
         correlation = memory_context.get(
             "correlation",
