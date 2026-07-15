@@ -36,3 +36,8 @@ venv/
 # ==========================
 json_llama_backup.py
 json_llama_backup_working.py
+
+# ==========================
+# Audit Json Files
+# ==========================
+response_engine/audit/*.jsonl

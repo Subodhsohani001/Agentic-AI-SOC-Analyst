@@ -185,6 +185,40 @@
       "severity": "MEDIUM",
       "source": "logs\\bruteforce.log",
       "timestamp": "2026-07-15T09:54:59+00:00"
+    },
+    {
+      "correlation": {
+        "has_historical_match": false,
+        "highest_similarity_score": 0.0,
+        "historical_incidents_checked": 6,
+        "matches": [],
+        "matching_incidents_found": 0
+      },
+      "detections": [
+        "PowerShell",
+        "powershell execution"
+      ],
+      "incident_id": "INC-2026-0007",
+      "iocs": {
+        "domains": [],
+        "emails": [],
+        "files": [
+          "powershell.exe",
+          "script.ps1"
+        ],
+        "hashes": [],
+        "ips": [],
+        "urls": [
+          "http://evil.local/script.ps1"
+        ]
+      },
+      "mitre": [
+        "T1059.001"
+      ],
+      "risk_score": 34,
+      "severity": "HIGH",
+      "source": "logs\\Powershell_execution.log",
+      "timestamp": "2026-07-15T15:31:57+00:00"
     }
   ],
   "schema_version": "1.0"
