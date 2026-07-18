@@ -36,6 +36,19 @@ from memory.incident_store import IncidentStore
 from memory.correlation_engine import CorrelationEngine
 from memory.timeline import IncidentTimeline
 
+from multi_agent import (
+    CorrelationAgent as MultiAgentCorrelationAgent,
+    Investigation,
+    InvestigationCoordinator,
+    InvestigationReporter,
+    IOCAgent as MultiAgentIOCAgent,
+    MITREAgent as MultiAgentMITREAgent,
+    ResponseAdvisorAgent,
+    RootCauseAgent,
+    TaskPriority,
+    ThreatIntelAgent,
+    TriageAgent,
+)
 
 ALLOWED_SEVERITIES = {"Low", "Medium", "High", "Critical"}
 ALLOWED_CONFIDENCE = {"Low", "Medium", "High"}
@@ -548,7 +561,7 @@ class SOCOrchestrator:
         
         self.response_agent = ResponseAgent()
 
-                # v0.6.0 policy-driven response orchestration.
+        # v0.6.0 policy-driven response orchestration.
         self.response_policy_engine = ResponsePolicyEngine()
 
         self.response_planner = ResponsePlanner(
@@ -573,6 +586,236 @@ class SOCOrchestrator:
         )
 
         self.report_generator = PDFReportGenerator("reports")
+    
+    
+    def _adapt_intelligence_for_multi_agent(
+        self,
+        intelligence_results: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Convert existing v0.5.0 intelligence output into the shared
+        format expected by the v0.7.0 multi-agent framework.
+        """
+
+        observables: list[dict[str, Any]] = []
+
+        severity_order = {
+            "INFORMATIONAL": 0,
+            "LOW": 1,
+            "MEDIUM": 2,
+            "HIGH": 3,
+            "CRITICAL": 4,
+        }
+
+        highest_severity = "INFORMATIONAL"
+        highest_risk_score = 0
+
+        malicious_count = 0
+        suspicious_count = 0
+        trusted_count = 0
+        unknown_count = 0
+
+        type_mapping = {
+            "ip_addresses": "ip",
+            "domains": "domain",
+            "urls": "url",
+            "hashes": "hash",
+        }
+
+        for item in intelligence_results:
+            if not isinstance(item, dict):
+                continue
+
+            summary = item.get("summary", {})
+
+            if not isinstance(summary, dict):
+                summary = {}
+
+            reputation = item.get(
+                "reputation",
+                {},
+            )
+
+            if not isinstance(reputation, dict):
+                reputation = {}
+
+            correlation = item.get(
+                "correlation",
+                {},
+            )
+
+            if not isinstance(correlation, dict):
+                correlation = {}
+
+            observable = str(
+                item.get(
+                    "ioc",
+                    item.get("observable", ""),
+                )
+            ).strip()
+
+            raw_type = str(
+                item.get(
+                    "ioc_type",
+                    item.get(
+                        "observable_type",
+                        "unknown",
+                    ),
+                )
+            ).strip().lower()
+
+            observable_type = type_mapping.get(
+                raw_type,
+                raw_type,
+            )
+
+            risk_score = self._safe_int(
+                summary.get(
+                    "risk_score",
+                    reputation.get(
+                        "risk_score",
+                        0,
+                    ),
+                )
+            )
+
+            verdict = str(
+                summary.get(
+                    "verdict",
+                    reputation.get(
+                        "verdict",
+                        "unknown",
+                    ),
+                )
+            ).strip().lower()
+
+            severity = str(
+                summary.get(
+                    "severity",
+                    reputation.get(
+                        "severity",
+                        "UNKNOWN",
+                    ),
+                )
+            ).strip().upper()
+
+            confidence_value = summary.get(
+                "confidence",
+                reputation.get(
+                    "confidence",
+                    0.70,
+                ),
+            )
+
+            if isinstance(
+                confidence_value,
+                str,
+            ):
+                confidence_mapping = {
+                    "LOW": 0.45,
+                    "MEDIUM": 0.70,
+                    "HIGH": 0.90,
+                }
+
+                confidence = confidence_mapping.get(
+                    confidence_value.upper(),
+                    0.70,
+                )
+            else:
+                try:
+                    confidence = float(
+                        confidence_value
+                    )
+                except (TypeError, ValueError):
+                    confidence = 0.70
+
+                if confidence > 1:
+                    confidence /= 100
+
+                confidence = min(
+                    max(confidence, 0.0),
+                    1.0,
+                )
+
+            if verdict in {
+                "malicious",
+                "confirmed_malicious",
+            }:
+                malicious_count += 1
+            elif verdict == "suspicious":
+                suspicious_count += 1
+            elif verdict == "trusted":
+                trusted_count += 1
+            else:
+                unknown_count += 1
+
+            if (
+                severity_order.get(
+                    severity,
+                    0,
+                )
+                > severity_order.get(
+                    highest_severity,
+                    0,
+                )
+            ):
+                highest_severity = severity
+
+            highest_risk_score = max(
+                highest_risk_score,
+                risk_score,
+            )
+
+            observables.append(
+                {
+                    "observable": observable,
+                    "observable_type": (
+                        observable_type
+                    ),
+                    "risk_score": risk_score,
+                    "verdict": verdict,
+                    "severity": severity,
+                    "confidence": confidence,
+                    "provider_results": {
+                        "virustotal": item.get(
+                            "virustotal"
+                        ),
+                        "abuseipdb": item.get(
+                            "abuseipdb"
+                        ),
+                    },
+                    "correlation": correlation,
+                    "intelligence_summary": (
+                        summary
+                    ),
+                    "provider_errors": item.get(
+                        "provider_errors",
+                        [],
+                    ),
+                }
+            )
+
+        return {
+            "observables": observables,
+            "summary": {
+                "observable_count": len(
+                    observables
+                ),
+                "malicious_count": malicious_count,
+                "suspicious_count": (
+                    suspicious_count
+                ),
+                "trusted_count": trusted_count,
+                "unknown_count": unknown_count,
+                "highest_risk_score": (
+                    highest_risk_score
+                ),
+                "highest_severity": (
+                    highest_severity
+                ),
+            },
+        }
+
 
     @staticmethod
     def _calculate_incident_risk(
@@ -1082,6 +1325,432 @@ class SOCOrchestrator:
                 "verdict": verdict,
             },
         }
+    
+    @staticmethod
+    def _multi_agent_priority(
+        severity: str,
+    ) -> TaskPriority:
+        """Convert SOC severity into multi-agent task priority."""
+
+        normalized = str(
+            severity or "Medium"
+        ).strip().upper()
+
+        if normalized == "CRITICAL":
+            return TaskPriority.P1
+
+        if normalized == "HIGH":
+            return TaskPriority.P2
+
+        if normalized == "MEDIUM":
+            return TaskPriority.P3
+
+        return TaskPriority.P4
+
+
+    def _run_multi_agent_investigation(
+        self,
+        log_data: str,
+        validated: dict[str, Any],
+        facts: dict[str, list[str]],
+        trusted_mitre: dict[str, str],
+        intelligence_results: list[dict[str, Any]],
+        memory_context: dict[str, Any],
+        source_log: str | Path | None,
+    ) -> dict[str, Any]:
+        """
+        Run the v0.7.0 multi-agent investigation using trusted
+        evidence already produced by v0.1-v0.6.
+
+        External threat-intelligence queries are not repeated here.
+        """
+
+        severity = str(
+            validated.get(
+                "severity",
+                "Medium",
+            )
+        ).strip().upper()
+
+        priority = self._multi_agent_priority(
+            severity
+        )
+
+        incident_id = str(
+            memory_context.get(
+                "incident_id",
+                validated.get(
+                    "incident_id",
+                    "INC-UNKNOWN",
+                ),
+            )
+        )
+
+        investigation = Investigation(
+            incident_id=incident_id,
+            title=str(
+                validated.get(
+                    "summary",
+                    "Multi-agent SOC investigation",
+                )
+            ),
+            description=(
+                "Investigate validated security activity from "
+                f"{source_log or 'an unknown source'}."
+            ),
+            severity=severity,
+            priority=priority,
+            metadata={
+                "source_log": (
+                    str(source_log)
+                    if source_log is not None
+                    else None
+                ),
+                "framework_version": "0.7.0",
+                "log_line_count": len(
+                    log_data.splitlines()
+                ),
+            },
+        )
+
+        coordinator = InvestigationCoordinator(
+            investigation
+        )
+
+        coordinator.register_agents(
+            [
+                TriageAgent(
+                    coordinator.context
+                ),
+                MultiAgentIOCAgent(
+                    coordinator.context
+                ),
+                MultiAgentMITREAgent(
+                    coordinator.context
+                ),
+                ThreatIntelAgent(
+                    coordinator.context
+                ),
+                MultiAgentCorrelationAgent(
+                    coordinator.context
+                ),
+                RootCauseAgent(
+                    coordinator.context
+                ),
+                ResponseAdvisorAgent(
+                    coordinator.context
+                ),
+            ]
+        )
+
+        technique_id = trusted_mitre.get(
+            "technique_id",
+            "Unknown",
+        )
+
+        mitre_mappings: list[dict[str, Any]] = []
+
+        if technique_id != "Unknown":
+            mitre_mappings.append(
+                {
+                    "id": technique_id,
+                    "name": trusted_mitre.get(
+                        "technique_name",
+                        "Unknown",
+                    ),
+                    "tactic": trusted_mitre.get(
+                        "tactic",
+                        "Unknown",
+                    ),
+                    "confidence": 0.95,
+                    "source": "trusted_legacy_mapping",
+                }
+            )
+
+        normalized_iocs = {
+            "ips": facts.get(
+                "ip_addresses",
+                [],
+            ),
+            "domains": facts.get(
+                "domains",
+                [],
+            ),
+            "urls": facts.get(
+                "urls",
+                [],
+            ),
+            "hashes": facts.get(
+                "hashes",
+                [],
+            ),
+        }
+
+        adapted_intelligence = (
+            self._adapt_intelligence_for_multi_agent(
+                intelligence_results
+            )
+        )
+
+        correlation_result = memory_context.get(
+            "correlation",
+            {},
+        )
+
+        if not isinstance(
+            correlation_result,
+            dict,
+        ):
+            correlation_result = {}
+
+        repeat_offenders = memory_context.get(
+            "repeat_offenders",
+            [],
+        )
+
+        is_repeat_offender = bool(
+            repeat_offenders
+        ) or bool(
+            correlation_result.get(
+                "is_repeat_offender",
+                False,
+            )
+        )
+
+        correlation_score = self._safe_int(
+            correlation_result.get(
+                "correlation_score",
+                correlation_result.get(
+                    "highest_similarity_score",
+                    0,
+                ),
+            )
+        )
+
+        if correlation_score >= 85:
+            match_level = "CRITICAL"
+        elif correlation_score >= 65:
+            match_level = "HIGH"
+        elif correlation_score >= 40:
+            match_level = "MEDIUM"
+        elif correlation_score >= 20:
+            match_level = "LOW"
+        else:
+            match_level = "NONE"
+
+        historical_correlation = {
+            **correlation_result,
+            "correlation_score": (
+                correlation_score
+            ),
+            "match_level": match_level,
+            "is_repeat_offender": (
+                is_repeat_offender
+            ),
+            "repeat_offenders": repeat_offenders,
+        }
+
+        coordinator.context.set_shared_value(
+            key="triage_assessment",
+            value={
+                "reported_severity": severity,
+                "assessed_severity": severity,
+                "assessed_priority": (
+                    priority.value
+                ),
+                "source_ips": facts.get(
+                    "ip_addresses",
+                    [],
+                ),
+                "domains": facts.get(
+                    "domains",
+                    [],
+                ),
+                "hashes": facts.get(
+                    "hashes",
+                    [],
+                ),
+                "hostnames": facts.get(
+                    "hostnames",
+                    [],
+                ),
+                "usernames": facts.get(
+                    "usernames",
+                    [],
+                ),
+                "is_repeat_offender": (
+                    is_repeat_offender
+                ),
+                "behavior_signals": [
+                    {
+                        "name": trusted_mitre.get(
+                            "attack_type",
+                            "Unknown activity",
+                        ),
+                        "matched_keywords": [],
+                    }
+                ],
+            },
+            actor="legacy_pipeline_adapter",
+        )
+
+        coordinator.context.set_shared_value(
+            key="normalized_iocs",
+            value={
+                "normalized": normalized_iocs,
+                "defanged": (
+                    self.ioc_formatter.format_facts(
+                        facts
+                    )
+                ),
+                "valid_indicator_count": sum(
+                    len(values)
+                    for values
+                    in normalized_iocs.values()
+                    if isinstance(
+                        values,
+                        list,
+                    )
+                ),
+            },
+            actor="legacy_pipeline_adapter",
+        )
+
+        coordinator.context.set_shared_value(
+            key="mitre_attack_mapping",
+            value={
+                "technique_ids": (
+                    [technique_id]
+                    if technique_id != "Unknown"
+                    else []
+                ),
+                "tactics": (
+                    [
+                        trusted_mitre.get(
+                            "tactic",
+                            "Unknown",
+                        )
+                    ]
+                    if technique_id != "Unknown"
+                    else []
+                ),
+                "mappings": mitre_mappings,
+                "confidence": (
+                    0.95
+                    if mitre_mappings
+                    else 0.35
+                ),
+            },
+            actor="legacy_pipeline_adapter",
+        )
+
+        coordinator.context.set_shared_value(
+            key="threat_intelligence_results",
+            value=adapted_intelligence,
+            actor="legacy_pipeline_adapter",
+        )
+
+        coordinator.context.set_shared_value(
+            key="historical_correlation",
+            value=historical_correlation,
+            actor="legacy_pipeline_adapter",
+        )
+
+        root_task, _ = coordinator.create_task(
+            task_type="root_cause_analysis",
+            description=(
+                "Reconstruct the attack chain and determine the "
+                "most probable root cause using validated evidence."
+            ),
+            priority=priority,
+            input_data={
+                "raw_logs": log_data,
+                "mitre_mappings": mitre_mappings,
+                "threat_intelligence_results": (
+                    adapted_intelligence.get(
+                        "observables",
+                        [],
+                    )
+                ),
+                "historical_correlation": (
+                    historical_correlation
+                ),
+            },
+            assigned_agent="root_cause_agent",
+            route_immediately=True,
+            raise_errors=False,
+        )
+
+        coordinator.start_investigation()
+
+        root_result = coordinator.router.execute_task(
+            root_task,
+            auto_route=True,
+            raise_errors=False,
+        )
+
+        response_tasks = [
+            task
+            for task
+            in coordinator.context.investigation.tasks
+            if task.task_type == "response_recommendation"
+            and task.status.value == "pending"
+        ]
+
+        response_results = []
+
+        for response_task in response_tasks:
+            response_result = (
+                coordinator.router.execute_task(
+                    response_task,
+                    auto_route=True,
+                    raise_errors=False,
+                )
+            )
+
+            if response_result is not None:
+                response_results.append(
+                    response_result
+                )
+
+        incomplete_tasks = (
+            coordinator.get_incomplete_tasks()
+        )
+
+        if not incomplete_tasks:
+            coordinator.complete_investigation()
+        else:
+            coordinator.pause_for_evidence(
+                "One or more multi-agent tasks remain incomplete."
+            )
+
+        reporter = InvestigationReporter(
+            coordinator.context
+        )
+
+        report = reporter.build_report(
+            include_event_log=True,
+            include_messages=True,
+            include_execution_results=True,
+        )
+
+        return {
+            "status": coordinator.get_status(),
+            "root_cause_execution": (
+                root_result.to_dict()
+                if root_result is not None
+                else None
+            ),
+            "response_executions": [
+                result.to_dict()
+                for result in response_results
+            ],
+            "report": report,
+            "shared_context": (
+                coordinator.context.to_dict()
+            ),
+        }
+
 
     def process(
         self,
@@ -1188,6 +1857,47 @@ class SOCOrchestrator:
         validated["historical_correlation"] = correlation_result
 
         # =====================================================
+        # v0.7.0 MULTI-AGENT INVESTIGATION
+        # =====================================================
+
+        multi_agent_output = (
+            self._run_multi_agent_investigation(
+                log_data=log_data,
+                validated=validated,
+                facts=facts,
+                trusted_mitre=trusted_mitre,
+                intelligence_results=intelligence_results,
+                memory_context=memory_context,
+                source_log=source_log,
+            )
+        )
+
+        multi_agent_report_path = Path(
+            "reports"
+        ) / (
+            f"multi_agent_{saved_incident['incident_id']}.json"
+        )
+
+        multi_agent_report_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        multi_agent_report_path.write_text(
+            json.dumps(
+                multi_agent_output["report"],
+                indent=4,
+                sort_keys=True,
+                default=str,
+            ),
+            encoding="utf-8",
+        )
+
+        validated["multi_agent_investigation"] = (
+            multi_agent_output["report"]
+        )
+
+        # =====================================================
         # v0.6.0 POLICY-DRIVEN RESPONSE ORCHESTRATION
         # =====================================================
 
@@ -1197,6 +1907,43 @@ class SOCOrchestrator:
             trusted_mitre=trusted_mitre,
             intelligence_results=intelligence_results,
             memory_context=memory_context,
+        )
+
+        multi_agent_report = multi_agent_output.get(
+            "report",
+            {},
+        )
+
+        response_context[
+            "multi_agent_investigation"
+        ] = multi_agent_report
+
+        response_context[
+            "root_cause_assessment"
+        ] = multi_agent_report.get(
+            "root_cause_assessment",
+            {},
+        )
+
+        response_context[
+            "attack_chain"
+        ] = multi_agent_report.get(
+            "attack_chain",
+            [],
+        )
+
+        response_context[
+            "response_advisory"
+        ] = multi_agent_report.get(
+            "response_advisory",
+            {},
+        )
+
+        response_context[
+            "hypothesis_summary"
+        ] = multi_agent_report.get(
+            "hypothesis_summary",
+            {},
         )
 
         response_decision = (
@@ -1306,9 +2053,13 @@ class SOCOrchestrator:
             "threat_intel": legacy_threat_intel_results,
             "intelligence_results": intelligence_results,
             "memory": memory_context,
+            "multi_agent": multi_agent_output,
             "response": response_output,
             "tool_output": tool_output,
             "report_path": str(report_path),
+            "multi_agent_report_path": str(
+                 multi_agent_report_path
+            ),
         }
         
 
@@ -1397,7 +2148,64 @@ def main() -> None:
         )
 
         print(
-            "\n========== v0.6.0 RESPONSE DECISION ==========\n"
+            "\n========== v0.7.0 MULTI-AGENT INVESTIGATION ==========\n"
+        )
+        multi_agent_report = result["multi_agent"]["report"]
+
+        print(
+            json.dumps(
+                {
+                    "report_metadata": (
+                        multi_agent_report.get(
+                            "report_metadata",
+                            {},
+                        )
+                    ),
+                    "investigation": (
+                        multi_agent_report.get(
+                            "investigation",
+                            {},
+                        )
+                    ),
+                    "executive_summary": (
+                        multi_agent_report.get(
+                            "executive_summary",
+                            {},
+                        )
+                    ),
+                    "completion_assessment": (
+                        multi_agent_report.get(
+                            "completion_assessment",
+                            {},
+                        )
+                    ),
+                    "root_cause_assessment": (
+                        multi_agent_report.get(
+                            "root_cause_assessment",
+                            {},
+                        )
+                    ),
+                    "hypothesis_summary": (
+                        multi_agent_report.get(
+                            "hypothesis_summary",
+                            {},
+                        )
+                    ),
+                    "response_advisory": (
+                        multi_agent_report.get(
+                            "response_advisory",
+                            {},
+                        )
+                    ),
+                },
+                indent=4,
+                sort_keys=True,
+                default=str,
+            )
+        )
+
+        print(
+            "\n========== RESPONSE ORCHESTRATION — v0.6.0 ENGINE ==========\n"
         )
         print(
             json.dumps(
@@ -1409,7 +2217,7 @@ def main() -> None:
         )
 
         print(
-            "\n========== v0.6.0 RESPONSE PLAN ==========\n"
+            "\n========== RESPONSE PLAN — v0.6.0 ENGINE ==========\n"
         )
         print(
             json.dumps(
@@ -1469,6 +2277,11 @@ def main() -> None:
 
         print("\n========== PDF REPORT ==========\n")
         print(f"Report created: {result['report_path']}")
+
+        print(
+            "\nFull v0.7.0 report saved to: "
+            f"{result['multi_agent_report_path']}"
+        )
 
     except (FileNotFoundError, ValueError, OSError) as exc:
         print(f"\n[ERROR] {exc}")

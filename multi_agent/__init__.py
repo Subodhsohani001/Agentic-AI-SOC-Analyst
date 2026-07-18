@@ -1,3 +1,14 @@
+from .investigation_reporter import (
+    InvestigationReporter,
+    InvestigationReporterError,
+)
+
+from .evidence_manager import (
+    EvidenceManager,
+    EvidenceManagerError,
+    EvidenceValidationError,
+)
+
 from .agent_base import (
     AgentExecutionError,
     AgentValidationError,
@@ -76,4 +87,9 @@ __all__ = [
     "TaskRoutingError",
     "TaskStatus",
     "TriageAgent",
+    "EvidenceManager",
+    "EvidenceManagerError",
+    "EvidenceValidationError",
+    "InvestigationReporter",
+    "InvestigationReporterError",
 ]
