@@ -1024,6 +1024,157 @@ class PDFReportGenerator:
 
         return table
 
+    @staticmethod
+    def _as_dict(value: Any) -> dict[str, Any]:
+        """Return a dictionary or an empty dictionary."""
+        return value if isinstance(value, dict) else {}
+
+    @staticmethod
+    def _as_list(value: Any) -> list[Any]:
+        """Return a list or an empty list."""
+        return value if isinstance(value, list) else []
+
+    @staticmethod
+    def _percentage(value: Any) -> str:
+        """Convert confidence values such as 0.85 into 85%."""
+        try:
+            number = float(value)
+
+            if number <= 1:
+                number *= 100
+
+            return f"{number:.0f}%"
+
+        except (TypeError, ValueError):
+            return "Not available"
+
+    def _list_text(
+        self,
+        values: Any,
+        *,
+        defang: bool = False,
+    ) -> str:
+        """Convert list values into safe ReportLab line-break text."""
+        items = self._as_list(values)
+
+        if not items:
+            return "Not available"
+
+        formatted: list[str] = []
+
+        for item in items:
+            if isinstance(item, dict):
+                text = ", ".join(
+                    f"{self._safe_text(key)}: {self._safe_text(value)}"
+                    for key, value in item.items()
+                    if not isinstance(value, (dict, list))
+                )
+            else:
+                text = (
+                    self._defang_observable(item)
+                    if defang
+                    else self._safe_text(item)
+                )
+
+            if text:
+                formatted.append(text)
+
+        return "<br/>".join(formatted) or "Not available"
+
+    def _attack_chain_table(
+        self,
+        attack_chain: list[dict[str, Any]],
+    ) -> Table:
+        rows = [
+            [
+                Paragraph("<b>Stage</b>", self.styles["SmallText"]),
+                Paragraph("<b>MITRE Techniques</b>", self.styles["SmallText"]),
+                Paragraph("<b>Confidence</b>", self.styles["SmallText"]),
+                Paragraph("<b>Supporting Evidence</b>", self.styles["SmallText"]),
+            ]
+        ]
+
+        for stage in self._as_list(attack_chain):
+            if not isinstance(stage, dict):
+                continue
+
+            rows.append(
+                [
+                    Paragraph(
+                        self._safe_text(stage.get("stage")),
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        self._list_text(stage.get("technique_ids")),
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        self._percentage(stage.get("confidence")),
+                        self.styles["SmallText"],
+                    ),
+                    Paragraph(
+                        self._list_text(
+                            stage.get("evidence"),
+                            defang=True,
+                        ),
+                        self.styles["SmallText"],
+                    ),
+                ]
+            )
+
+        if len(rows) == 1:
+            rows.append(
+                [
+                    Paragraph("No stage", self.styles["SmallText"]),
+                    Paragraph("Not available", self.styles["SmallText"]),
+                    Paragraph("Not available", self.styles["SmallText"]),
+                    Paragraph(
+                        "No attack-chain stages were reconstructed.",
+                        self.styles["SmallText"],
+                    ),
+                ]
+            )
+
+        table = Table(
+            rows,
+            colWidths=[
+                30 * mm,
+                38 * mm,
+                25 * mm,
+                77 * mm,
+            ],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#263238"),
+                    ),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.35,
+                        colors.HexColor("#B0BEC5"),
+                    ),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
+        )
+
+        return table
+
     def generate(
         self,
         analysis: dict[str, Any],
@@ -1034,10 +1185,14 @@ class PDFReportGenerator:
         intelligence_results: list[dict[str, Any]] | None = None,
         source_log: str | Path | None = None,
         memory_context: dict[str, Any] | None = None,
+        multi_agent_report: dict[str, Any] | None = None,
+        response_output: dict[str, Any] | None = None,
     ) -> Path:
         threat_intel = threat_intel or []
         intelligence_results = intelligence_results or []
         memory_context = memory_context or {}
+        multi_agent_report = multi_agent_report or {}
+        response_output = response_output or {}
 
         created_at = datetime.now()
         attack_type = self._safe_text(analysis.get("attack_type"))
@@ -1510,6 +1665,1502 @@ class PDFReportGenerator:
             story.append(candidate_table)
 
         story.append(Spacer(1, 12))
+
+        # =====================================================
+        # v0.7.0 MULTI-AGENT INVESTIGATION
+        # =====================================================
+
+        if multi_agent_report:
+            story.append(PageBreak())
+
+            story.append(
+                Paragraph(
+                    "Multi-Agent Investigation — v0.7.0",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    "This section summarizes the coordinated investigation "
+                    "performed by the root-cause and response-advisory agents "
+                    "using validated evidence from the deterministic SOC pipeline.",
+                    self.styles["ReportBody"],
+                )
+            )
+
+            investigation = self._as_dict(
+                multi_agent_report.get("investigation")
+            )
+
+            completion = self._as_dict(
+                multi_agent_report.get("completion_assessment")
+            )
+
+            agent_summary = self._as_dict(
+                multi_agent_report.get("agent_summary")
+            )
+
+            evidence_summary = self._as_dict(
+                multi_agent_report.get("evidence_summary")
+            )
+
+            report_metadata = self._as_dict(
+                multi_agent_report.get("report_metadata")
+            )
+
+            investigation_rows = [
+                (
+                    "Investigation ID",
+                    self._safe_text(
+                        investigation.get(
+                            "investigation_id",
+                            report_metadata.get("investigation_id"),
+                        )
+                    ),
+                ),
+                (
+                    "Incident ID",
+                    self._safe_text(
+                        investigation.get(
+                            "incident_id",
+                            report_metadata.get("incident_id"),
+                        )
+                    ),
+                ),
+                (
+                    "Investigation Status",
+                    self._safe_text(
+                        investigation.get(
+                            "status",
+                            completion.get("readiness"),
+                        )
+                    ),
+                ),
+                (
+                    "Readiness",
+                    self._safe_text(
+                        completion.get("readiness")
+                    ),
+                ),
+                (
+                    "Incomplete Tasks",
+                    self._safe_text(
+                        completion.get(
+                            "incomplete_task_count",
+                            0,
+                        )
+                    ),
+                ),
+                (
+                    "Failed Tasks",
+                    self._safe_text(
+                        completion.get(
+                            "failed_task_count",
+                            0,
+                        )
+                    ),
+                ),
+                (
+                    "Confirmed Hypotheses",
+                    self._safe_text(
+                        completion.get(
+                            "confirmed_hypothesis_count",
+                            0,
+                        )
+                    ),
+                ),
+                (
+                    "Root Cause Available",
+                    (
+                        "YES"
+                        if completion.get("root_cause_present")
+                        else "NO"
+                    ),
+                ),
+                (
+                    "Response Advisory Available",
+                    (
+                        "YES"
+                        if completion.get(
+                            "response_advisory_present"
+                        )
+                        else "NO"
+                    ),
+                ),
+                (
+                    "Participating Agents",
+                    self._safe_text(
+                        agent_summary.get(
+                            "participating_agent_count",
+                            0,
+                        )
+                    ),
+                ),
+                (
+                    "Evidence Count",
+                    self._safe_text(
+                        evidence_summary.get(
+                            "evidence_count",
+                            0,
+                        )
+                    ),
+                ),
+                (
+                    "Evidence Integrity Score",
+                    (
+                        f"{self._safe_text(
+                            evidence_summary.get(
+                                'integrity_score',
+                                0,
+                            )
+                        )}%"
+                    ),
+                ),
+                (
+                    "Average Evidence Confidence",
+                    self._percentage(
+                        evidence_summary.get(
+                            "average_confidence"
+                        )
+                    ),
+                ),
+            ]
+
+            story.append(
+                self._key_value_table(
+                    investigation_rows
+                )
+            )
+
+            # =================================================
+            # EXECUTIVE SUMMARY
+            # =================================================
+
+            executive_summary = multi_agent_report.get(
+                "executive_summary"
+            )
+
+            story.append(
+                Paragraph(
+                    "Multi-Agent Executive Summary",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            if isinstance(executive_summary, dict):
+                executive_text = (
+                    executive_summary.get("summary")
+                    or executive_summary.get(
+                        "executive_summary"
+                    )
+                    or executive_summary.get(
+                        "assessment"
+                    )
+                )
+
+                story.append(
+                    Paragraph(
+                        self._safe_text(executive_text),
+                        self.styles["ReportBody"],
+                    )
+                )
+
+                executive_rows = []
+
+                for label, key in (
+                    ("Severity", "severity"),
+                    ("Confidence", "confidence"),
+                    ("Status", "status"),
+                    ("Risk Score", "risk_score"),
+                    ("Primary Finding", "primary_finding"),
+                ):
+                    if key in executive_summary:
+                        value = executive_summary.get(key)
+
+                        if key == "confidence":
+                            value = self._percentage(value)
+
+                        executive_rows.append(
+                            (
+                                label,
+                                self._safe_text(value),
+                            )
+                        )
+
+                if executive_rows:
+                    story.append(
+                        self._key_value_table(
+                            executive_rows
+                        )
+                    )
+
+            elif executive_summary:
+                story.append(
+                    Paragraph(
+                        self._safe_text(
+                            executive_summary
+                        ),
+                        self.styles["ReportBody"],
+                    )
+                )
+
+            else:
+                story.append(
+                    Paragraph(
+                        "No separate executive summary was generated.",
+                        self.styles["ReportBody"],
+                    )
+                )
+
+            # =================================================
+            # ROOT-CAUSE ASSESSMENT
+            # =================================================
+
+            root_cause = self._as_dict(
+                multi_agent_report.get(
+                    "root_cause_assessment"
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    "Root-Cause Assessment",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            if root_cause:
+                probable_initial_access = self._as_dict(
+                    root_cause.get(
+                        "probable_initial_access"
+                    )
+                )
+
+                root_cause_rows = [
+                    (
+                        "Primary Root Cause",
+                        self._safe_text(
+                            root_cause.get(
+                                "primary_root_cause"
+                            )
+                        ),
+                    ),
+                    (
+                        "Severity",
+                        self._safe_text(
+                            root_cause.get("severity")
+                        ),
+                    ),
+                    (
+                        "Root-Cause Confidence",
+                        self._percentage(
+                            root_cause.get(
+                                "root_cause_confidence"
+                            )
+                        ),
+                    ),
+                    (
+                        "Overall Confidence",
+                        self._percentage(
+                            root_cause.get(
+                                "overall_confidence"
+                            )
+                        ),
+                    ),
+                    (
+                        "Probable Initial Access",
+                        self._safe_text(
+                            probable_initial_access.get(
+                                "method"
+                            )
+                        ),
+                    ),
+                    (
+                        "Initial-Access Confidence",
+                        self._percentage(
+                            probable_initial_access.get(
+                                "confidence"
+                            )
+                        ),
+                    ),
+                    (
+                        "Initial-Access Evidence",
+                        self._list_text(
+                            probable_initial_access.get(
+                                "evidence"
+                            ),
+                            defang=True,
+                        ),
+                    ),
+                ]
+
+                story.append(
+                    self._key_value_table(
+                        root_cause_rows
+                    )
+                )
+
+                supporting_evidence = root_cause.get(
+                    "supporting_evidence"
+                )
+
+                if supporting_evidence:
+                    story.append(
+                        Paragraph(
+                            "<b>Supporting Evidence</b>",
+                            self.styles["ReportBody"],
+                        )
+                    )
+
+                    story.append(
+                        Paragraph(
+                            self._list_text(
+                                supporting_evidence,
+                                defang=True,
+                            ),
+                            self.styles["ReportBody"],
+                        )
+                    )
+
+                alternative_causes = self._as_list(
+                    root_cause.get(
+                        "alternative_causes"
+                    )
+                )
+
+                if alternative_causes:
+                    story.append(
+                        Paragraph(
+                            "Alternative Root-Cause Possibilities",
+                            self.styles["SectionHeading"],
+                        )
+                    )
+
+                    for cause in alternative_causes:
+                        if not isinstance(cause, dict):
+                            continue
+
+                        story.append(
+                            self._key_value_table(
+                                [
+                                    (
+                                        "Possible Cause",
+                                        self._safe_text(
+                                            cause.get("cause")
+                                        ),
+                                    ),
+                                    (
+                                        "Confidence",
+                                        self._percentage(
+                                            cause.get(
+                                                "confidence"
+                                            )
+                                        ),
+                                    ),
+                                    (
+                                        "Evidence",
+                                        self._list_text(
+                                            cause.get(
+                                                "evidence"
+                                            ),
+                                            defang=True,
+                                        ),
+                                    ),
+                                ]
+                            )
+                        )
+
+                        story.append(
+                            Spacer(1, 5)
+                        )
+
+            else:
+                story.append(
+                    Paragraph(
+                        "No root-cause assessment was produced.",
+                        self.styles["ReportBody"],
+                    )
+                )
+
+            # =================================================
+            # ATTACK CHAIN
+            # =================================================
+
+            story.append(
+                Paragraph(
+                    "Reconstructed Attack Chain",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            story.append(
+                self._attack_chain_table(
+                    self._as_list(
+                        multi_agent_report.get(
+                            "attack_chain"
+                        )
+                    )
+                )
+            )
+
+            # =================================================
+            # HYPOTHESIS SUMMARY
+            # =================================================
+
+            hypothesis_summary = self._as_dict(
+                multi_agent_report.get(
+                    "hypothesis_summary"
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    "Investigation Hypothesis Summary",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            if hypothesis_summary:
+                hypothesis_rows = [
+                    (
+                        "Total Hypotheses",
+                        self._safe_text(
+                            hypothesis_summary.get(
+                                "total_hypotheses",
+                                hypothesis_summary.get(
+                                    "hypothesis_count",
+                                    0,
+                                ),
+                            )
+                        ),
+                    ),
+                    (
+                        "Confirmed",
+                        self._safe_text(
+                            hypothesis_summary.get(
+                                "confirmed_count",
+                                hypothesis_summary.get(
+                                    "confirmed_hypothesis_count",
+                                    0,
+                                ),
+                            )
+                        ),
+                    ),
+                    (
+                        "Rejected",
+                        self._safe_text(
+                            hypothesis_summary.get(
+                                "rejected_count",
+                                0,
+                            )
+                        ),
+                    ),
+                    (
+                        "Under Investigation",
+                        self._safe_text(
+                            hypothesis_summary.get(
+                                "under_investigation_count",
+                                0,
+                            )
+                        ),
+                    ),
+                    (
+                        "Highest Confidence",
+                        self._percentage(
+                            hypothesis_summary.get(
+                                "highest_confidence"
+                            )
+                        ),
+                    ),
+                ]
+
+                story.append(
+                    self._key_value_table(
+                        hypothesis_rows
+                    )
+                )
+
+                hypotheses = self._as_list(
+                    hypothesis_summary.get(
+                        "hypotheses"
+                    )
+                )
+
+                for hypothesis in hypotheses:
+                    if not isinstance(hypothesis, dict):
+                        continue
+
+                    story.append(
+                        Spacer(1, 5)
+                    )
+
+                    story.append(
+                        self._key_value_table(
+                            [
+                                (
+                                    "Hypothesis",
+                                    self._safe_text(
+                                        hypothesis.get(
+                                            "title",
+                                            hypothesis.get(
+                                                "description"
+                                            ),
+                                        )
+                                    ),
+                                ),
+                                (
+                                    "Status",
+                                    self._safe_text(
+                                        hypothesis.get(
+                                            "status"
+                                        )
+                                    ),
+                                ),
+                                (
+                                    "Confidence",
+                                    self._percentage(
+                                        hypothesis.get(
+                                            "confidence"
+                                        )
+                                    ),
+                                ),
+                                (
+                                    "Proposed By",
+                                    self._safe_text(
+                                        hypothesis.get(
+                                            "proposed_by"
+                                        )
+                                    ),
+                                ),
+                            ]
+                        )
+                    )
+
+            else:
+                story.append(
+                    Paragraph(
+                        (
+                            f"Confirmed hypotheses: "
+                            f"{self._safe_text(
+                                completion.get(
+                                    'confirmed_hypothesis_count',
+                                    0,
+                                )
+                            )}."
+                        ),
+                        self.styles["ReportBody"],
+                    )
+                )
+
+            # =================================================
+            # RESPONSE ADVISORY
+            # =================================================
+
+            response_advisory = self._as_dict(
+                multi_agent_report.get(
+                    "response_advisory"
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    "Multi-Agent Response Advisory",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            if response_advisory:
+                advisory_rows = [
+                    (
+                        "Severity",
+                        self._safe_text(
+                            response_advisory.get(
+                                "severity"
+                            )
+                        ),
+                    ),
+                    (
+                        "Recommended Mode",
+                        self._safe_text(
+                            response_advisory.get(
+                                "recommended_mode"
+                            )
+                        ),
+                    ),
+                    (
+                        "Action Count",
+                        self._safe_text(
+                            response_advisory.get(
+                                "action_count",
+                                len(
+                                    self._as_list(
+                                        response_advisory.get(
+                                            "actions"
+                                        )
+                                    )
+                                ),
+                            )
+                        ),
+                    ),
+                    (
+                        "Requires Approval",
+                        self._safe_text(
+                            response_advisory.get(
+                                "requires_approval_count",
+                                0,
+                            )
+                        ),
+                    ),
+                    (
+                        "Confidence",
+                        self._percentage(
+                            response_advisory.get(
+                                "confidence"
+                            )
+                        ),
+                    ),
+                ]
+
+                story.append(
+                    self._key_value_table(
+                        advisory_rows
+                    )
+                )
+
+                advisory_actions = self._as_list(
+                    response_advisory.get(
+                        "actions",
+                        response_advisory.get(
+                            "recommendations"
+                        ),
+                    )
+                )
+
+                if advisory_actions:
+                    story.append(
+                        Paragraph(
+                            "<b>Recommended Actions</b>",
+                            self.styles["ReportBody"],
+                        )
+                    )
+
+                    for action in advisory_actions:
+                        if isinstance(action, dict):
+                            action_name = (
+                                action.get("action")
+                                or action.get("action_type")
+                                or action.get("title")
+                                or action.get("name")
+                            )
+
+                            action_text = (
+                                action.get("description")
+                                or action.get("reason")
+                                or action.get(
+                                    "recommendation"
+                                )
+                            )
+
+                            priority_value = action.get(
+                                "priority"
+                            )
+
+                            approval_required = action.get(
+                                "requires_approval"
+                            )
+
+                            story.append(
+                                self._key_value_table(
+                                    [
+                                        (
+                                            "Action",
+                                            self._safe_text(
+                                                action_name
+                                            ),
+                                        ),
+                                        (
+                                            "Description",
+                                            self._safe_text(
+                                                action_text
+                                            ),
+                                        ),
+                                        (
+                                            "Priority",
+                                            self._safe_text(
+                                                priority_value
+                                            ),
+                                        ),
+                                        (
+                                            "Human Approval",
+                                            (
+                                                "REQUIRED"
+                                                if approval_required
+                                                else "NOT REQUIRED"
+                                            ),
+                                        ),
+                                    ]
+                                )
+                            )
+
+                            story.append(
+                                Spacer(1, 5)
+                            )
+
+                        else:
+                            story.append(
+                                Paragraph(
+                                    f"• {self._safe_text(action)}",
+                                    self.styles["ReportBody"],
+                                )
+                            )
+
+            else:
+                story.append(
+                    Paragraph(
+                        "No multi-agent response advisory was available.",
+                        self.styles["ReportBody"],
+                    )
+                )
+
+        else:
+            story.append(
+                Paragraph(
+                    "Multi-Agent Investigation — v0.7.0",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    "No multi-agent investigation report was supplied.",
+                    self.styles["ReportBody"],
+                )
+            )
+
+        # =====================================================
+        # v0.6.0 RESPONSE ORCHESTRATION
+        # =====================================================
+
+        if response_output:
+            story.append(PageBreak())
+
+            story.append(
+                Paragraph(
+                    "Response Orchestration — v0.6.0",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    "This section records the policy decision, planned response "
+                    "actions, approval requirements, ticket creation, simulated "
+                    "execution results, and audit-trail location.",
+                    self.styles["ReportBody"],
+                )
+            )
+
+            response_decision = self._as_dict(
+                response_output.get("decision")
+            )
+
+            response_plan = self._as_dict(
+                response_output.get("plan")
+            )
+
+            approval_requests = self._as_list(
+                response_output.get("approval_requests")
+            )
+
+            ticket = self._as_dict(
+                response_output.get("ticket")
+            )
+
+            execution_results = self._as_list(
+                response_output.get("execution_results")
+            )
+
+            response_context = self._as_dict(
+                response_output.get("context")
+            )
+
+            # =================================================
+            # RESPONSE DECISION
+            # =================================================
+
+            story.append(
+                Paragraph(
+                    "Policy Decision",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            decision_rows = [
+                (
+                    "Operating Mode",
+                    self._safe_text(
+                        response_output.get(
+                            "mode",
+                            "simulation",
+                        )
+                    ),
+                ),
+                (
+                    "Incident ID",
+                    self._safe_text(
+                        response_context.get(
+                            "incident_id",
+                            response_plan.get("incident_id"),
+                        )
+                    ),
+                ),
+                (
+                    "Priority",
+                    self._safe_text(
+                        response_decision.get(
+                            "priority"
+                        )
+                    ),
+                ),
+                (
+                    "Severity",
+                    self._safe_text(
+                        response_context.get(
+                            "severity"
+                        )
+                    ),
+                ),
+                (
+                    "Confidence",
+                    self._safe_text(
+                        response_context.get(
+                            "confidence"
+                        )
+                    ),
+                ),
+                (
+                    "Combined Risk Score",
+                    (
+                        f"{self._safe_text(
+                            response_context.get(
+                                'combined_risk_score',
+                                response_context.get(
+                                    'risk_score',
+                                    0,
+                                ),
+                            )
+                        )} / 100"
+                    ),
+                ),
+                (
+                    "Intelligence Verdict",
+                    self._safe_text(
+                        response_context.get(
+                            "intelligence_verdict",
+                            response_context.get(
+                                "verdict"
+                            ),
+                        )
+                    ),
+                ),
+                (
+                    "Repeat Offender",
+                    (
+                        "YES"
+                        if response_context.get(
+                            "is_repeat_offender",
+                            response_context.get(
+                                "repeat_offender",
+                                False,
+                            ),
+                        )
+                        else "NO"
+                    ),
+                ),
+                (
+                    "Correlation Level",
+                    self._safe_text(
+                        response_context.get(
+                            "correlation_level"
+                        )
+                    ),
+                ),
+                (
+                    "Decision Reason",
+                    self._safe_text(
+                        response_decision.get(
+                            "reason",
+                            response_decision.get(
+                                "decision_reason"
+                            ),
+                        )
+                    ),
+                ),
+            ]
+
+            story.append(
+                self._key_value_table(
+                    decision_rows
+                )
+            )
+
+            recommended_actions = self._as_list(
+                response_decision.get(
+                    "recommended_actions",
+                    response_decision.get(
+                        "actions"
+                    ),
+                )
+            )
+
+            if recommended_actions:
+                story.append(
+                    Paragraph(
+                        "<b>Policy-Recommended Actions</b>",
+                        self.styles["ReportBody"],
+                    )
+                )
+
+                story.append(
+                    Paragraph(
+                        self._list_text(
+                            recommended_actions
+                        ),
+                        self.styles["ReportBody"],
+                    )
+                )
+
+            # =================================================
+            # RESPONSE PLAN
+            # =================================================
+
+            story.append(
+                Paragraph(
+                    "Response Plan",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            plan_rows = [
+                (
+                    "Plan ID",
+                    self._safe_text(
+                        response_plan.get("plan_id")
+                    ),
+                ),
+                (
+                    "Incident ID",
+                    self._safe_text(
+                        response_plan.get("incident_id")
+                    ),
+                ),
+                (
+                    "Plan Status",
+                    self._safe_text(
+                        response_plan.get("status")
+                    ),
+                ),
+                (
+                    "Priority",
+                    self._safe_text(
+                        response_plan.get(
+                            "priority",
+                            response_decision.get(
+                                "priority"
+                            ),
+                        )
+                    ),
+                ),
+                (
+                    "Simulation Mode",
+                    (
+                        "YES"
+                        if response_plan.get(
+                            "simulation_mode",
+                            True,
+                        )
+                        else "NO"
+                    ),
+                ),
+                (
+                    "Created At",
+                    self._safe_text(
+                        response_plan.get("created_at")
+                    ),
+                ),
+                (
+                    "Updated At",
+                    self._safe_text(
+                        response_plan.get("updated_at")
+                    ),
+                ),
+            ]
+
+            story.append(
+                self._key_value_table(
+                    plan_rows
+                )
+            )
+
+            planned_actions = self._as_list(
+                response_plan.get("actions")
+            )
+
+            story.append(
+                Paragraph(
+                    "Planned Actions",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            if planned_actions:
+                for index, action in enumerate(
+                    planned_actions,
+                    start=1,
+                ):
+                    if not isinstance(action, dict):
+                        continue
+
+                    action_type = (
+                        action.get("action_type")
+                        or action.get("type")
+                        or action.get("name")
+                    )
+
+                    action_rows = [
+                        (
+                            "Action Number",
+                            str(index),
+                        ),
+                        (
+                            "Action ID",
+                            self._safe_text(
+                                action.get("action_id")
+                            ),
+                        ),
+                        (
+                            "Action Type",
+                            self._safe_text(
+                                action_type
+                            ),
+                        ),
+                        (
+                            "Status",
+                            self._safe_text(
+                                action.get("status")
+                            ),
+                        ),
+                        (
+                            "Priority",
+                            self._safe_text(
+                                action.get("priority")
+                            ),
+                        ),
+                        (
+                            "Requires Approval",
+                            (
+                                "YES"
+                                if action.get(
+                                    "requires_approval"
+                                )
+                                else "NO"
+                            ),
+                        ),
+                        (
+                            "Description",
+                            self._safe_text(
+                                action.get(
+                                    "description"
+                                )
+                            ),
+                        ),
+                        (
+                            "Reason",
+                            self._safe_text(
+                                action.get(
+                                    "reason"
+                                )
+                            ),
+                        ),
+                        (
+                            "Target",
+                            self._defang_observable(
+                                action.get(
+                                    "target",
+                                    action.get(
+                                        "target_value"
+                                    ),
+                                )
+                            ),
+                        ),
+                    ]
+
+                    story.append(
+                        self._key_value_table(
+                            action_rows
+                        )
+                    )
+
+                    story.append(
+                        Spacer(1, 6)
+                    )
+
+            else:
+                story.append(
+                    Paragraph(
+                        "No response actions were included in the plan.",
+                        self.styles["ReportBody"],
+                    )
+                )
+
+            # =================================================
+            # APPROVAL REQUESTS
+            # =================================================
+
+            story.append(
+                Paragraph(
+                    "Approval Requests",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            if approval_requests:
+                for index, request in enumerate(
+                    approval_requests,
+                    start=1,
+                ):
+                    if not isinstance(request, dict):
+                        continue
+
+                    approval_rows = [
+                        (
+                            "Request Number",
+                            str(index),
+                        ),
+                        (
+                            "Approval ID",
+                            self._safe_text(
+                                request.get(
+                                    "approval_id",
+                                    request.get(
+                                        "request_id"
+                                    ),
+                                )
+                            ),
+                        ),
+                        (
+                            "Action ID",
+                            self._safe_text(
+                                request.get("action_id")
+                            ),
+                        ),
+                        (
+                            "Action Type",
+                            self._safe_text(
+                                request.get(
+                                    "action_type"
+                                )
+                            ),
+                        ),
+                        (
+                            "Status",
+                            self._safe_text(
+                                request.get("status")
+                            ),
+                        ),
+                        (
+                            "Requested By",
+                            self._safe_text(
+                                request.get(
+                                    "requested_by"
+                                )
+                            ),
+                        ),
+                        (
+                            "Requested At",
+                            self._safe_text(
+                                request.get(
+                                    "requested_at",
+                                    request.get(
+                                        "created_at"
+                                    ),
+                                )
+                            ),
+                        ),
+                        (
+                            "Reason",
+                            self._safe_text(
+                                request.get("reason")
+                            ),
+                        ),
+                    ]
+
+                    story.append(
+                        self._key_value_table(
+                            approval_rows
+                        )
+                    )
+
+                    story.append(
+                        Spacer(1, 6)
+                    )
+
+            else:
+                story.append(
+                    Paragraph(
+                        "No approval requests were created for this response plan.",
+                        self.styles["ReportBody"],
+                    )
+                )
+
+            # =================================================
+            # SOC TICKET
+            # =================================================
+
+            story.append(
+                Paragraph(
+                    "SOC Ticket",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            if ticket:
+                ticket_rows = [
+                    (
+                        "Ticket ID",
+                        self._safe_text(
+                            ticket.get("ticket_id")
+                        ),
+                    ),
+                    (
+                        "Incident ID",
+                        self._safe_text(
+                            ticket.get("incident_id")
+                        ),
+                    ),
+                    (
+                        "Title",
+                        self._safe_text(
+                            ticket.get(
+                                "title",
+                                ticket.get("summary"),
+                            )
+                        ),
+                    ),
+                    (
+                        "Severity",
+                        self._safe_text(
+                            ticket.get("severity")
+                        ),
+                    ),
+                    (
+                        "Priority",
+                        self._safe_text(
+                            ticket.get("priority")
+                        ),
+                    ),
+                    (
+                        "Status",
+                        self._safe_text(
+                            ticket.get("status")
+                        ),
+                    ),
+                    (
+                        "Created At",
+                        self._safe_text(
+                            ticket.get("created_at")
+                        ),
+                    ),
+                ]
+
+                story.append(
+                    self._key_value_table(
+                        ticket_rows
+                    )
+                )
+
+            else:
+                story.append(
+                    Paragraph(
+                        "No SOC ticket was created for this response plan.",
+                        self.styles["ReportBody"],
+                    )
+                )
+
+            # =================================================
+            # SIMULATED EXECUTION RESULTS
+            # =================================================
+
+            story.append(
+                Paragraph(
+                    "Simulated Action Execution",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            if execution_results:
+                for index, execution in enumerate(
+                    execution_results,
+                    start=1,
+                ):
+                    if not isinstance(execution, dict):
+                        continue
+
+                    execution_rows = [
+                        (
+                            "Execution Number",
+                            str(index),
+                        ),
+                        (
+                            "Action ID",
+                            self._safe_text(
+                                execution.get("action_id")
+                            ),
+                        ),
+                        (
+                            "Action Type",
+                            self._safe_text(
+                                execution.get(
+                                    "action_type"
+                                )
+                            ),
+                        ),
+                        (
+                            "Status",
+                            self._safe_text(
+                                execution.get("status")
+                            ),
+                        ),
+                        (
+                            "Success",
+                            (
+                                "YES"
+                                if execution.get(
+                                    "success"
+                                )
+                                else "NO"
+                            ),
+                        ),
+                        (
+                            "Simulation",
+                            (
+                                "YES"
+                                if execution.get(
+                                    "simulation",
+                                    execution.get(
+                                        "simulation_mode",
+                                        True,
+                                    ),
+                                )
+                                else "NO"
+                            ),
+                        ),
+                        (
+                            "Message",
+                            self._safe_text(
+                                execution.get(
+                                    "message",
+                                    execution.get(
+                                        "result"
+                                    ),
+                                )
+                            ),
+                        ),
+                        (
+                            "Error",
+                            self._safe_text(
+                                execution.get("error")
+                            ),
+                        ),
+                    ]
+
+                    story.append(
+                        self._key_value_table(
+                            execution_rows
+                        )
+                    )
+
+                    story.append(
+                        Spacer(1, 6)
+                    )
+
+            else:
+                story.append(
+                    Paragraph(
+                        "No action execution results were recorded.",
+                        self.styles["ReportBody"],
+                    )
+                )
+
+            # =================================================
+            # AUDIT TRAIL
+            # =================================================
+
+            story.append(
+                Paragraph(
+                    "Response Audit Trail",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            story.append(
+                self._key_value_table(
+                    [
+                        (
+                            "Audit Log Path",
+                            self._safe_text(
+                                response_output.get(
+                                    "audit_log_path"
+                                )
+                            ),
+                        ),
+                        (
+                            "Execution Mode",
+                            self._safe_text(
+                                response_output.get(
+                                    "mode",
+                                    "simulation",
+                                )
+                            ),
+                        ),
+                        (
+                            "Recorded Approval Requests",
+                            str(
+                                len(
+                                    approval_requests
+                                )
+                            ),
+                        ),
+                        (
+                            "Recorded Execution Results",
+                            str(
+                                len(
+                                    execution_results
+                                )
+                            ),
+                        ),
+                    ]
+                )
+            )
+
+        else:
+            story.append(
+                Paragraph(
+                    "Response Orchestration — v0.6.0",
+                    self.styles["SectionHeading"],
+                )
+            )
+
+            story.append(
+                Paragraph(
+                    "No response-orchestration output was supplied.",
+                    self.styles["ReportBody"],
+                )
+            )
+
+        story.append(Spacer(1, 12))
+
         story.append(
             KeepTogether(
                 [

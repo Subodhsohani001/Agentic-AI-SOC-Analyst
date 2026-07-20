@@ -2043,6 +2043,8 @@ class SOCOrchestrator:
             intelligence_results=intelligence_results,
             source_log=source_log,
             memory_context=memory_context,
+            multi_agent_report=multi_agent_output["report"],
+            response_output=response_output,
         )
 
         return {
