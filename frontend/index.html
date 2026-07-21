@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Shark AI SOC Analyst</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/style.css"
+    >
+</head>
+
+<body>
+    <main class="application-container">
+
+        <section class="hero-section">
+            <p class="badge">Agentic Security Operations Platform</p>
+
+            <h1>Shark AI SOC Analyst</h1>
+
+            <p class="hero-description">
+                Upload a security log and launch an automated,
+                multi-agent incident investigation.
+            </p>
+
+            <div class="feature-list">
+                <span>IOC Extraction</span>
+                <span>MITRE ATT&amp;CK Mapping</span>
+                <span>Threat Intelligence</span>
+                <span>Incident Correlation</span>
+            </div>
+
+            <div class="hero-shark-video-container">
+                <video
+                    class="hero-shark-video"
+                    autoplay
+                    muted
+                    loop
+                    playsinline
+                >
+                    <source
+                        src="/static/assets/shark-animation.webm"
+                        type="video/webm"
+                    >
+
+                    Your browser does not support video playback.
+                </video>
+            </div>
+
+        </section>
+
+        <section class="analysis-panel">
+
+            <div class="panel-heading">
+                <p class="section-label">New Investigation</p>
+                <h2>Analyze a security log</h2>
+
+                <p>
+                    Select a supported log file to begin the SOC
+                    investigation workflow.
+                </p>
+            </div>
+
+            <form id="analysis-form">
+
+                <label
+                    for="log-file"
+                    class="file-upload-area"
+                    id="file-upload-area"
+                >
+                    <span class="upload-icon">↑</span>
+
+                    <strong id="file-label">
+                        Choose a security log
+                    </strong>
+
+                    <span>
+                        Click here to select a file
+                    </span>
+                </label>
+
+                <input
+                    type="file"
+                    id="log-file"
+                    name="file"
+                    hidden
+                    required
+                >
+
+                <button type="submit" id="analyze-button">
+                    Start Investigation
+                </button>
+            </form>
+
+            <section
+                id="analysis-status"
+                class="analysis-status hidden"
+            >
+                <div class="spinner"></div>
+
+                <div>
+                    <strong id="status-title">
+                        Investigation in progress
+                    </strong>
+
+                    <p id="status-message">
+                        The SOC agents are analyzing your log.
+                    </p>
+                </div>
+            </section>
+
+            <section
+                id="error-panel"
+                class="error-panel hidden"
+            ></section>
+
+            <section
+                id="results-panel"
+                class="results-panel hidden"
+            >
+                <div class="results-heading">
+                    <div>
+                        <p class="section-label">
+                            Investigation Result
+                        </p>
+
+                        <h2>Incident analysis</h2>
+                    </div>
+
+                    <span
+                        id="severity-badge"
+                        class="severity-badge"
+                    >
+                        UNKNOWN
+                    </span>
+                </div>
+
+                <div id="results-content"></div>
+
+                <button
+                    type="button"
+                    id="analyze-again-button"
+                    class="analyze-again-button hidden"
+                >
+                    Analyze Another Log
+                </button>
+
+            </section>
+
+        </section>
+    </main>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

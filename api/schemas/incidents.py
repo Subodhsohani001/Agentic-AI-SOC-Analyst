@@ -15,7 +15,10 @@ class ArtifactPaths(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    pdf_report: str | None = None
+    report_name: str | None = None
+    view_url: str | None = None
+    download_url: str | None = None
+
     multi_agent_report: str | None = None
     audit_log: str | None = None
 

@@ -182,6 +182,20 @@ async def analyze_incident(
         if not isinstance(mitre_attack, dict):
             mitre_attack = {}
 
+        report_path_value = result.get(
+            "report_path"
+        )
+
+        report_name: str | None = None
+
+        if report_path_value:
+            report_name = Path(
+                str(report_path_value)
+            ).name
+
+        if report_path_value:
+            report_name = Path(str(report_path_value)).name
+
         return IncidentAnalysisResponse(
             success=True,
             message="Security log analyzed successfully.",
@@ -279,8 +293,16 @@ async def analyze_incident(
                 ),
             },
             artifacts={
-                "pdf_report": result.get(
-                    "report_path"
+                "report_name": report_name,
+                "view_url": (
+                    f"{API_PREFIX}/reports/{report_name}"
+                    if report_name
+                    else None
+                ),
+                "download_url": (
+                    f"{API_PREFIX}/reports/{report_name}?download=true"
+                    if report_name
+                    else None
                 ),
                 "multi_agent_report": result.get(
                     "multi_agent_report_path"

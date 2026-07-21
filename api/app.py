@@ -4,9 +4,11 @@ api/app.py
 Main FastAPI application for the Agentic AI SOC Analyst.
 """
 
-from fastapi import FastAPI
+from pathlib import Path
 
-from api.routes.incidents import router as incidents_router
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from api.config import (
     API_DESCRIPTION,
@@ -16,8 +18,22 @@ from api.config import (
     ENABLE_SWAGGER,
 )
 from api.routes.health import router as health_router
+from api.routes.incidents import router as incidents_router
+from api.routes.reports import router as reports_router
 
 
+# ---------------------------------------------------------
+# Project Paths
+# ---------------------------------------------------------
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+FRONTEND_DIR = PROJECT_ROOT / "frontend"
+INDEX_FILE = FRONTEND_DIR / "index.html"
+
+
+# ---------------------------------------------------------
+# FastAPI Application
+# ---------------------------------------------------------
 
 app = FastAPI(
     title=API_TITLE,
@@ -28,22 +44,29 @@ app = FastAPI(
 )
 
 
+# ---------------------------------------------------------
+# Frontend Static Files
+# ---------------------------------------------------------
+
+app.mount(
+    "/static",
+    StaticFiles(directory=FRONTEND_DIR),
+    name="static",
+)
+
+
 @app.get(
     "/",
-    tags=["Root"],
-    summary="Root Endpoint",
+    tags=["Frontend"],
+    summary="SOC Analyst Web Interface",
+    include_in_schema=False,
 )
-async def root() -> dict[str, str]:
+async def root() -> FileResponse:
     """
-    Root endpoint for the API.
+    Serve the Agentic AI SOC Analyst frontend.
     """
 
-    return {
-        "message": (
-            "Welcome to the Agentic AI SOC Analyst API. "
-            "Visit /docs to explore the API."
-        )
-    }
+    return FileResponse(INDEX_FILE)
 
 
 # ---------------------------------------------------------
@@ -51,5 +74,5 @@ async def root() -> dict[str, str]:
 # ---------------------------------------------------------
 
 app.include_router(health_router)
-
 app.include_router(incidents_router)
+app.include_router(reports_router)
