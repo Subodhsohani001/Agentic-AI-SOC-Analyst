@@ -100,19 +100,171 @@
 
             <section
                 id="analysis-status"
-                class="analysis-status hidden"
+                class="investigation-timeline hidden"
             >
-                <div class="spinner"></div>
+                <div class="timeline-header">
+                    <div>
+                        <p class="section-label">
+                            Live Investigation
+                        </p>
 
-                <div>
-                    <strong id="status-title">
-                        Investigation in progress
-                    </strong>
+                        <h3 id="status-title">
+                            Investigation in progress
+                        </h3>
 
-                    <p id="status-message">
-                        The SOC agents are analyzing your log.
-                    </p>
+                        <p id="status-message">
+                            The SOC agents are analyzing your log.
+                        </p>
+                    </div>
+
+                    <span
+                        id="timeline-progress"
+                        class="timeline-progress"
+                    >
+                        0%
+                    </span>
                 </div>
+
+                <div class="timeline-progress-track">
+                    <div
+                        id="timeline-progress-bar"
+                        class="timeline-progress-bar"
+                    ></div>
+                </div>
+
+                <ol
+                    id="timeline-steps"
+                    class="timeline-steps"
+                    aria-label="Investigation progress"
+                >
+                    <li
+                        class="timeline-step pending"
+                        data-step="0"
+                    >
+                        <span class="timeline-marker">1</span>
+
+                        <div>
+                            <strong>Upload received</strong>
+                            <p>Security log accepted for analysis.</p>
+                        </div>
+
+                        <span class="timeline-state">
+                            Pending
+                        </span>
+                    </li>
+
+                    <li
+                        class="timeline-step pending"
+                        data-step="1"
+                    >
+                        <span class="timeline-marker">2</span>
+
+                        <div>
+                            <strong>Parsing security log</strong>
+                            <p>Reading and normalizing log evidence.</p>
+                        </div>
+
+                        <span class="timeline-state">
+                            Pending
+                        </span>
+                    </li>
+
+                    <li
+                        class="timeline-step pending"
+                        data-step="2"
+                    >
+                        <span class="timeline-marker">3</span>
+
+                        <div>
+                            <strong>Extracting indicators</strong>
+                            <p>Finding IPs, domains, URLs, files and hashes.</p>
+                        </div>
+
+                        <span class="timeline-state">
+                            Pending
+                        </span>
+                    </li>
+
+                    <li
+                        class="timeline-step pending"
+                        data-step="3"
+                    >
+                        <span class="timeline-marker">4</span>
+
+                        <div>
+                            <strong>Mapping MITRE ATT&amp;CK</strong>
+                            <p>Matching observed behavior to attack techniques.</p>
+                        </div>
+
+                        <span class="timeline-state">
+                            Pending
+                        </span>
+                    </li>
+
+                    <li
+                        class="timeline-step pending"
+                        data-step="4"
+                    >
+                        <span class="timeline-marker">5</span>
+
+                        <div>
+                            <strong>Correlating threat intelligence</strong>
+                            <p>Checking reputation and historical intelligence.</p>
+                        </div>
+
+                        <span class="timeline-state">
+                            Pending
+                        </span>
+                    </li>
+
+                    <li
+                        class="timeline-step pending"
+                        data-step="5"
+                    >
+                        <span class="timeline-marker">6</span>
+
+                        <div>
+                            <strong>Running multi-agent investigation</strong>
+                            <p>Reconstructing the attack chain and root cause.</p>
+                        </div>
+
+                        <span class="timeline-state">
+                            Pending
+                        </span>
+                    </li>
+
+                    <li
+                        class="timeline-step pending"
+                        data-step="6"
+                    >
+                        <span class="timeline-marker">7</span>
+
+                        <div>
+                            <strong>Planning response actions</strong>
+                            <p>Evaluating containment and remediation actions.</p>
+                        </div>
+
+                        <span class="timeline-state">
+                            Pending
+                        </span>
+                    </li>
+
+                    <li
+                        class="timeline-step pending"
+                        data-step="7"
+                    >
+                        <span class="timeline-marker">8</span>
+
+                        <div>
+                            <strong>Generating PDF report</strong>
+                            <p>Preparing the analyst-ready investigation report.</p>
+                        </div>
+
+                        <span class="timeline-state">
+                            Pending
+                        </span>
+                    </li>
+                </ol>
             </section>
 
             <section

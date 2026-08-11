@@ -285,47 +285,6 @@ button:disabled {
     transform: none;
 }
 
-/* ---------------------------------------------------------
-   Analysis Status
---------------------------------------------------------- */
-
-.analysis-status {
-    margin-top: 22px;
-    padding: 18px;
-
-    display: flex;
-    align-items: center;
-    gap: 15px;
-
-    border: 1px solid var(--border);
-    border-radius: 14px;
-
-    background: rgba(53, 199, 255, 0.06);
-}
-
-.analysis-status p {
-    margin: 5px 0 0;
-    color: var(--muted);
-}
-
-.spinner {
-    width: 34px;
-    height: 34px;
-
-    flex-shrink: 0;
-
-    border: 4px solid rgba(53, 199, 255, 0.2);
-    border-top-color: var(--primary);
-    border-radius: 50%;
-
-    animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
 
 /* ---------------------------------------------------------
    Error Panel
@@ -471,6 +430,813 @@ button:disabled {
 
 .analyze-again-button:hover {
     background: rgba(53, 199, 255, 0.14);
+}
+
+/* ---------------------------------------------------------
+   Selected File
+--------------------------------------------------------- */
+
+.file-upload-area.file-selected {
+    border-color: var(--success);
+    background: rgba(62, 230, 160, 0.07);
+}
+
+.file-upload-area.file-selected .upload-icon {
+    background: var(--success);
+}
+
+/* ---------------------------------------------------------
+   Investigation Success
+--------------------------------------------------------- */
+
+.investigation-success {
+    margin-top: 18px;
+    padding: 16px;
+
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    border: 1px solid rgba(62, 230, 160, 0.3);
+    border-radius: 14px;
+
+    background: rgba(62, 230, 160, 0.07);
+}
+
+.investigation-success p {
+    margin: 4px 0 0;
+    color: var(--muted);
+}
+
+.success-icon {
+    width: 38px;
+    height: 38px;
+
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+
+    border-radius: 50%;
+
+    color: #03150e;
+    background: var(--success);
+
+    font-size: 22px;
+    font-weight: 900;
+}
+
+/* ---------------------------------------------------------
+   Primary Incident Metrics
+--------------------------------------------------------- */
+
+.incident-primary-grid {
+    margin-top: 18px;
+
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.metric-card {
+    min-width: 0;
+    padding: 17px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+
+    border: 1px solid var(--border);
+    border-radius: 14px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(53, 199, 255, 0.07),
+            rgba(255, 255, 255, 0.02)
+        );
+}
+
+.metric-label,
+.metric-description {
+    color: var(--muted);
+}
+
+.metric-label {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.metric-value {
+    overflow-wrap: anywhere;
+
+    color: var(--text);
+
+    font-size: 19px;
+    line-height: 1.35;
+}
+
+.metric-description {
+    font-size: 13px;
+}
+
+/* ---------------------------------------------------------
+   Dashboard Cards
+--------------------------------------------------------- */
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.dashboard-card {
+    min-width: 0;
+
+    margin-top: 14px;
+    padding: 18px;
+
+    border: 1px solid var(--border);
+    border-radius: 14px;
+
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.card-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.card-heading h3,
+.report-card h3 {
+    margin: 5px 0 0;
+    color: var(--text);
+}
+
+.card-eyebrow {
+    color: var(--primary);
+
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------
+   Severity Badges
+--------------------------------------------------------- */
+
+.severity-badge {
+    border: 1px solid transparent;
+}
+
+.severity-critical {
+    color: #ffd4d8;
+    border-color: rgba(255, 66, 84, 0.45);
+    background: rgba(255, 66, 84, 0.14);
+}
+
+.severity-high {
+    color: #ffe0c2;
+    border-color: rgba(255, 145, 58, 0.45);
+    background: rgba(255, 145, 58, 0.14);
+}
+
+.severity-medium {
+    color: #fff0b3;
+    border-color: rgba(255, 202, 58, 0.45);
+    background: rgba(255, 202, 58, 0.14);
+}
+
+.severity-low {
+    color: #c6f5ff;
+    border-color: rgba(53, 199, 255, 0.4);
+    background: rgba(53, 199, 255, 0.12);
+}
+
+.severity-informational,
+.severity-unknown {
+    color: var(--muted);
+    border-color: var(--border);
+    background: var(--panel-light);
+}
+
+/* ---------------------------------------------------------
+   MITRE ATT&CK Card
+--------------------------------------------------------- */
+
+.mitre-card {
+    background:
+        linear-gradient(
+            145deg,
+            rgba(255, 95, 109, 0.06),
+            rgba(255, 255, 255, 0.025)
+        );
+}
+
+.mitre-technique-id {
+    padding: 8px 11px;
+
+    border: 1px solid rgba(255, 95, 109, 0.3);
+    border-radius: 9px;
+
+    color: #ffc2c7;
+    background: rgba(255, 95, 109, 0.08);
+
+    font-family: Consolas, monospace;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.mitre-content {
+    margin-top: 18px;
+
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.mitre-content div {
+    padding: 13px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+
+    border-radius: 10px;
+
+    background: rgba(0, 0, 0, 0.14);
+}
+
+.mitre-content span {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.mitre-content strong {
+    overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------
+   IOC Summary
+--------------------------------------------------------- */
+
+.ioc-grid {
+    margin-top: 18px;
+
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.ioc-stat {
+    min-width: 0;
+    padding: 13px 8px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+
+    border: 1px solid var(--border);
+    border-radius: 11px;
+
+    background: rgba(53, 199, 255, 0.04);
+
+    text-align: center;
+}
+
+.ioc-stat strong {
+    color: var(--primary);
+    font-size: 22px;
+}
+
+.ioc-stat span {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+/* ---------------------------------------------------------
+   Investigation and Response Details
+--------------------------------------------------------- */
+
+.detail-list {
+    margin-top: 16px;
+
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-row {
+    padding: 11px 0;
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+
+    border-bottom: 1px solid rgba(114, 205, 255, 0.1);
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-row span {
+    color: var(--muted);
+}
+
+.detail-row strong {
+    max-width: 55%;
+
+    overflow-wrap: anywhere;
+    text-align: right;
+}
+
+.status-pill,
+.priority-pill {
+    padding: 7px 10px;
+
+    border: 1px solid var(--border);
+    border-radius: 999px;
+
+    color: #c7edff;
+    background: rgba(53, 199, 255, 0.08);
+
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.priority-p1,
+.priority-critical {
+    color: #ffd4d8;
+    border-color: rgba(255, 66, 84, 0.4);
+    background: rgba(255, 66, 84, 0.12);
+}
+
+.priority-p2,
+.priority-high {
+    color: #ffe0c2;
+    border-color: rgba(255, 145, 58, 0.4);
+    background: rgba(255, 145, 58, 0.12);
+}
+
+/* ---------------------------------------------------------
+   Report Card
+--------------------------------------------------------- */
+
+.report-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+}
+
+.report-card p {
+    margin-bottom: 0;
+    overflow-wrap: anywhere;
+    color: var(--muted);
+}
+
+.report-card .report-actions {
+    min-width: 300px;
+    margin-top: 0;
+}
+
+/* ---------------------------------------------------------
+   Technical Details
+--------------------------------------------------------- */
+
+.technical-details {
+    margin-top: 14px;
+
+    border: 1px solid var(--border);
+    border-radius: 14px;
+
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.technical-details summary {
+    padding: 17px;
+
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+
+    color: var(--text);
+
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.technical-details summary span {
+    color: var(--muted);
+
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.technical-details pre {
+    max-height: 420px;
+    overflow: auto;
+
+    margin: 0 17px 17px;
+    padding: 14px;
+
+    border-radius: 10px;
+
+    color: var(--muted);
+    background: rgba(0, 0, 0, 0.2);
+
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* ---------------------------------------------------------
+   Dashboard Responsive Rules
+--------------------------------------------------------- */
+
+@media (max-width: 1050px) {
+    .ioc-grid {
+        grid-template-columns:
+            repeat(3, minmax(0, 1fr));
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .report-card {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .report-card .report-actions {
+        min-width: 0;
+    }
+}
+
+@media (max-width: 520px) {
+    .incident-primary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .mitre-content {
+        grid-template-columns: 1fr;
+    }
+
+    .ioc-grid {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+    }
+
+    .card-heading {
+        flex-direction: column;
+    }
+
+    .technical-details summary {
+        flex-direction: column;
+    }
+}
+
+/* ---------------------------------------------------------
+   Investigation Timeline
+--------------------------------------------------------- */
+
+.investigation-timeline {
+    margin-top: 22px;
+    padding: 20px;
+
+    border: 1px solid var(--border);
+    border-radius: 16px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(53, 199, 255, 0.07),
+            rgba(255, 255, 255, 0.02)
+        );
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.timeline-header h3 {
+    margin: 5px 0 0;
+    color: var(--text);
+}
+
+.timeline-header p:last-child {
+    margin: 6px 0 0;
+    color: var(--muted);
+}
+
+.timeline-progress {
+    min-width: 58px;
+    padding: 8px 10px;
+
+    border: 1px solid rgba(53, 199, 255, 0.32);
+    border-radius: 999px;
+
+    color: var(--primary);
+    background: rgba(53, 199, 255, 0.08);
+
+    font-size: 13px;
+    font-weight: 900;
+    text-align: center;
+}
+
+.timeline-progress-track {
+    width: 100%;
+    height: 7px;
+
+    margin-top: 18px;
+    overflow: hidden;
+
+    border-radius: 999px;
+
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.timeline-progress-bar {
+    width: 0;
+    height: 100%;
+
+    border-radius: inherit;
+
+    background: linear-gradient(
+        90deg,
+        var(--primary),
+        var(--success)
+    );
+
+    box-shadow:
+        0 0 16px rgba(53, 199, 255, 0.45);
+
+    transition: width 0.5s ease;
+}
+
+.timeline-steps {
+    margin: 20px 0 0;
+    padding: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    list-style: none;
+}
+
+.timeline-step {
+    position: relative;
+
+    min-height: 74px;
+    padding: 12px 10px 12px 55px;
+
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+
+    border-radius: 12px;
+
+    transition:
+        background 0.25s ease,
+        border-color 0.25s ease,
+        transform 0.25s ease;
+}
+
+.timeline-step:not(:last-child)::after {
+    content: "";
+
+    position: absolute;
+    top: 50px;
+    bottom: -15px;
+    left: 28px;
+
+    width: 2px;
+
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.timeline-marker {
+    position: absolute;
+    top: 15px;
+    left: 10px;
+    z-index: 1;
+
+    width: 36px;
+    height: 36px;
+
+    display: grid;
+    place-items: center;
+
+    border: 2px solid rgba(255, 255, 255, 0.13);
+    border-radius: 50%;
+
+    color: var(--muted);
+    background: #07121b;
+
+    font-size: 14px;
+    font-weight: 900;
+
+    transition:
+        border-color 0.25s ease,
+        color 0.25s ease,
+        background 0.25s ease,
+        box-shadow 0.25s ease;
+}
+
+.timeline-step strong {
+    display: block;
+    color: var(--text);
+}
+
+.timeline-step p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.timeline-state {
+    padding: 6px 9px;
+
+    border: 1px solid var(--border);
+    border-radius: 999px;
+
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.025);
+
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* Pending Step */
+
+.timeline-step.pending {
+    opacity: 0.58;
+}
+
+/* Active Step */
+
+.timeline-step.active {
+    border: 1px solid rgba(53, 199, 255, 0.24);
+
+    background: rgba(53, 199, 255, 0.07);
+
+    transform: translateX(3px);
+}
+
+.timeline-step.active .timeline-marker {
+    color: #021019;
+    border-color: var(--primary);
+    background: var(--primary);
+
+    box-shadow:
+        0 0 0 5px rgba(53, 199, 255, 0.1),
+        0 0 18px rgba(53, 199, 255, 0.5);
+
+    animation: timelinePulse 1.4s infinite;
+}
+
+.timeline-step.active .timeline-state {
+    color: var(--primary);
+    border-color: rgba(53, 199, 255, 0.32);
+    background: rgba(53, 199, 255, 0.08);
+}
+
+/* Completed Step */
+
+.timeline-step.completed {
+    opacity: 1;
+}
+
+.timeline-step.completed .timeline-marker {
+    color: #03150e;
+    border-color: var(--success);
+    background: var(--success);
+
+    box-shadow:
+        0 0 13px rgba(62, 230, 160, 0.3);
+}
+
+.timeline-step.completed .timeline-state {
+    color: var(--success);
+    border-color: rgba(62, 230, 160, 0.3);
+    background: rgba(62, 230, 160, 0.07);
+}
+
+.timeline-step.completed:not(:last-child)::after {
+    background: rgba(62, 230, 160, 0.38);
+}
+
+/* Failed Step */
+
+.timeline-step.failed {
+    border: 1px solid rgba(255, 95, 109, 0.3);
+    background: rgba(255, 95, 109, 0.07);
+}
+
+.timeline-step.failed .timeline-marker {
+    color: #ffffff;
+    border-color: #ff5f6d;
+    background: #ff5f6d;
+
+    box-shadow:
+        0 0 14px rgba(255, 95, 109, 0.35);
+}
+
+.timeline-step.failed .timeline-state {
+    color: #ffc2c7;
+    border-color: rgba(255, 95, 109, 0.35);
+    background: rgba(255, 95, 109, 0.09);
+}
+
+/* Completed Investigation */
+
+.investigation-timeline.timeline-complete {
+    border-color: rgba(62, 230, 160, 0.34);
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(62, 230, 160, 0.08),
+            rgba(255, 255, 255, 0.02)
+        );
+}
+
+.investigation-timeline.timeline-complete
+.timeline-progress {
+    color: var(--success);
+    border-color: rgba(62, 230, 160, 0.3);
+    background: rgba(62, 230, 160, 0.07);
+}
+
+/* Failed Investigation */
+
+.investigation-timeline.timeline-failed {
+    border-color: rgba(255, 95, 109, 0.36);
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(255, 95, 109, 0.08),
+            rgba(255, 255, 255, 0.02)
+        );
+}
+
+.investigation-timeline.timeline-failed
+.timeline-progress {
+    color: #ffc2c7;
+    border-color: rgba(255, 95, 109, 0.35);
+    background: rgba(255, 95, 109, 0.09);
+}
+
+.investigation-timeline.timeline-failed
+.timeline-progress-bar {
+    background: var(--danger);
+
+    box-shadow:
+        0 0 16px rgba(255, 95, 109, 0.4);
+}
+
+@keyframes timelinePulse {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+/* ---------------------------------------------------------
+   Timeline Responsive Rules
+--------------------------------------------------------- */
+
+@media (max-width: 600px) {
+    .timeline-header {
+        flex-direction: column;
+    }
+
+    .timeline-step {
+        grid-template-columns: 1fr;
+        padding-right: 8px;
+    }
+
+    .timeline-state {
+        width: fit-content;
+    }
 }
 
 /* ---------------------------------------------------------
