@@ -639,6 +639,19 @@ GitHub: [@Subodhsohani001](https://github.com/Subodhsohani001)
 
 ---
 
+## 📜 License
+
+This project is licensed under the **MIT License**.
+
+Copyright © 2026 Subodh R. Sohani.
+
+See the [LICENSE](LICENSE) file for complete license terms.
+
+Additional copyright and attribution information is available in
+[COPYRIGHT.md](COPYRIGHT.md).
+
+---
+
 ## ⭐ Support
 
 If you find this project useful or interesting, consider giving the repository a ⭐.
