@@ -615,7 +615,11 @@ The demo will showcase:
 - PDF report generation
 - FastAPI backend
 
-> **Demo video:** Coming soon
+Watch the complete demonstration of the **Ollama-Powered Agentic AI SOC Analyst**, including setup, security log analysis, threat intelligence enrichment, MITRE ATT&CK mapping, investigation results, and report generation.
+
+[![Ollama-Powered Agentic AI SOC Analyst Demo](https://img.youtube.com/vi/DWZg5bRNQq8/maxresdefault.jpg)](https://youtu.be/DWZg5bRNQq8)
+
+▶️ **[Watch the Full Demo on YouTube](https://youtu.be/DWZg5bRNQq8)**
 
 ---
 
